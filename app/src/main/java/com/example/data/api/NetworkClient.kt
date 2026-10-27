@@ -37,7 +37,7 @@ class NetworkClient(
         .build()
 
     @Volatile
-    private var currentBaseUrl: String = "http://10.0.2.2:8000/"
+    private var currentBaseUrl: String = "http://147.224.251.137:8001/"
 
     @Volatile
     private var currentApiService: ApiService? = null

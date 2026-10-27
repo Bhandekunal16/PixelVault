@@ -196,12 +196,22 @@ fun ProfileScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     FilterChip(
+                        selected = editingUrl.contains("147.224.251.137"),
+                        onClick = {
+                            editingUrl = "http://147.224.251.137:8001/"
+                            viewModel.updateBaseUrl(editingUrl)
+                        },
+                        label = { Text("Server (:8001)") },
+                        modifier = Modifier.testTag("preset_server_button")
+                    )
+
+                    FilterChip(
                         selected = editingUrl.contains("10.0.2.2"),
                         onClick = {
                             editingUrl = "http://10.0.2.2:8000/"
                             viewModel.updateBaseUrl(editingUrl)
                         },
-                        label = { Text("Emulator (10.0.2.2)") },
+                        label = { Text("Emulator") },
                         modifier = Modifier.testTag("preset_emulator_button")
                     )
 

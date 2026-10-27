@@ -61,6 +61,10 @@ The application interfaces directly with the following backend routes:
 
 The application includes an in-app **Server Configuration** editor in the **Settings** tab with instant connection testing (`GET /` ping with latency readout):
 
+### Default Backend Server
+- **URL:** `http://147.224.251.137:8001/`
+- **Default:** Pre-configured as the app's default backend endpoint.
+
 ### Standard Android Emulator
 - **URL:** `http://10.0.2.2:8000/`
 - **Explanation:** In the Android emulator, `localhost` points to the emulator itself. `10.0.2.2` is the special alias provided by the Android emulator routing table to access the host machine's `127.0.0.1`.

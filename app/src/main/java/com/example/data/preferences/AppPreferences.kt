@@ -24,8 +24,9 @@ class AppPreferences(private val context: Context) {
         private val KEY_ENCRYPTION_SECRET = stringPreferencesKey("encryption_secret")
         private val KEY_ENCRYPTION_ALGO = stringPreferencesKey("encryption_algo")
 
-        // Standard default: 10.0.2.2:8000 for standard Android emulator to host machine
-        const val DEFAULT_BASE_URL = "http://10.0.2.2:8000/"
+        // Default configured backend server path
+        const val DEFAULT_BASE_URL = "http://147.224.251.137:8001/"
+        const val EMULATOR_BASE_URL = "http://10.0.2.2:8000/"
         const val LOCALHOST_BASE_URL = "http://localhost:8000/"
     }
 
