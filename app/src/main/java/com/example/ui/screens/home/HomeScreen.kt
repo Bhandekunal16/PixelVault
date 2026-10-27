@@ -1,0 +1,481 @@
+package com.example.ui.screens.home
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.Collections
+import androidx.compose.material.icons.filled.DataUsage
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.example.data.model.ImageMetadata
+import com.example.ui.components.EmptyStateCard
+import com.example.ui.components.StatPill
+import com.example.ui.components.StatusBanner
+import com.example.ui.viewmodel.DashboardViewModel
+import com.example.util.FileUtils
+
+@Composable
+fun HomeScreen(
+    viewModel: DashboardViewModel,
+    baseUrl: String,
+    onNavigateToUpload: () -> Unit,
+    onNavigateToImages: () -> Unit,
+    onImageSelected: (ImageMetadata) -> Unit,
+    onLogout: () -> Unit
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val scrollState = rememberScrollState()
+
+    LaunchedEffect(Unit) {
+        viewModel.loadDashboardData()
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .verticalScroll(scrollState)
+            .padding(16.dp)
+            .testTag("home_screen")
+    ) {
+        // Top Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "ImageVault",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = if (uiState.userEmail.isNotBlank()) "Welcome, ${uiState.userEmail}" else "Welcome Back",
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Row {
+                IconButton(
+                    onClick = { viewModel.loadDashboardData() },
+                    modifier = Modifier.testTag("refresh_dashboard_button")
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                }
+                IconButton(
+                    onClick = { viewModel.logout(onLogout) },
+                    modifier = Modifier.testTag("logout_dashboard_button")
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Logout", tint = MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (uiState.errorMessage != null) {
+            StatusBanner(
+                message = uiState.errorMessage!!,
+                isError = true,
+                onDismiss = { viewModel.loadDashboardData() }
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Stats Overview Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("dashboard_stats_card"),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(MaterialTheme.colorScheme.primary, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudDone,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Cloud Storage Vault",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                    if (uiState.isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            text = "${uiState.totalImagesCount}",
+                            style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            text = "Total Images",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            text = FileUtils.formatBytes(uiState.totalStoredBytes),
+                            style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            text = "Stored Size",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            text = "${uiState.savingsPercentage}%",
+                            style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Optimized",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+
+                if (uiState.totalSavingsBytes > 0) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Saved ${FileUtils.formatBytes(uiState.totalSavingsBytes)} via backend image encoding",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Quick Actions Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Button(
+                onClick = onNavigateToUpload,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+                    .testTag("dashboard_quick_upload_button"),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Upload Image")
+            }
+
+            OutlinedButton(
+                onClick = onNavigateToImages,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+                    .testTag("dashboard_view_all_button"),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Icon(Icons.Default.Collections, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("View All (${uiState.totalImagesCount})")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        // Recent Images Section
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Recent Uploads",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            if (uiState.recentImages.isNotEmpty()) {
+                TextButton(
+                    onClick = onNavigateToImages,
+                    modifier = Modifier.testTag("recent_images_see_all")
+                ) {
+                    Text("See All")
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        if (uiState.recentImages.isEmpty() && !uiState.isLoading) {
+            EmptyStateCard(
+                title = "No Images Uploaded Yet",
+                description = "Upload photos to convert, optimize, and store them securely on your Express server.",
+                icon = Icons.Default.Image,
+                actionLabel = "Upload First Image",
+                onAction = onNavigateToUpload
+            )
+        } else {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(vertical = 4.dp),
+                modifier = Modifier.testTag("recent_images_list")
+            ) {
+                items(uiState.recentImages) { image ->
+                    RecentImageCard(
+                        image = image,
+                        baseUrl = baseUrl,
+                        onClick = { onImageSelected(image) }
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        // Account Information Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("dashboard_account_card"),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Person,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Account & Node.js Session",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                AccountInfoRow("Email", uiState.userEmail)
+                if (uiState.userId.isNotBlank()) {
+                    AccountInfoRow("User ID", uiState.userId)
+                }
+                AccountInfoRow("Role", uiState.userRole.uppercase())
+                AccountInfoRow("Server URL", baseUrl)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+    }
+}
+
+@Composable
+fun RecentImageCard(
+    image: ImageMetadata,
+    baseUrl: String,
+    onClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val normalizedUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
+    val imageUrl = "${normalizedUrl}image?id=${image.effectiveId}"
+
+    Card(
+        modifier = Modifier
+            .width(180.dp)
+            .clickable(onClick = onClick)
+            .testTag("recent_image_card_${image.effectiveId}"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(110.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(imageUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = image.filename,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                // Format badge
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                ) {
+                    Text(
+                        text = image.effectiveFormat,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            Column(modifier = Modifier.padding(10.dp)) {
+                Text(
+                    text = image.filename ?: "Untitled Image",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = FileUtils.formatBytes(image.storedSize),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (image.effectiveOptimized) {
+                        Text(
+                            text = "Optimized",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AccountInfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
