@@ -1,5 +1,5 @@
-/gradlew clean &&
+./gradlew clean &&
 
-./gradlew build  &&
+./gradlew assembleDebug  &&
 
-adb install -t /home/kunalbhande/Desktop/CodeTree&Roots/cdn-byte-server/PixelVault/app/build/outputs/apk/debug/app-debug.apk
+adb install -r -t "/home/kunalbhande/Desktop/CodeTree&Roots/cdn-byte-server/PixelVault/app/build/outputs/apk/debug/app-debug.apk"
