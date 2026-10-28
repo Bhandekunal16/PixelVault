@@ -3,8 +3,8 @@ package com.example.ui.screens.upload
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,13 +24,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,6 +40,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,6 +49,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -58,9 +60,11 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.data.model.OutputFormat
-import com.example.ui.components.StatPill
 import com.example.ui.components.StatusBanner
 import com.example.ui.theme.SuccessGreen
+import com.example.ui.theme.SuccessGreenContainerDark
+import com.example.ui.theme.SuccessGreenContainerLight
+import com.example.util.EmailUtils
 import com.example.ui.viewmodel.UploadViewModel
 import com.example.util.FileUtils
 
@@ -72,6 +76,8 @@ fun UploadScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val scrollState = rememberScrollState()
+
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
     // Android zero-permission Photo Picker
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -109,7 +115,7 @@ fun UploadScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // Success Card if uploaded
+        // Solid Success Card if uploaded
         if (uiState.uploadedMetadata != null) {
             val meta = uiState.uploadedMetadata!!
             Card(
@@ -117,7 +123,10 @@ fun UploadScreen(
                     .fillMaxWidth()
                     .testTag("upload_success_card"),
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = SuccessGreen.copy(alpha = 0.12f))
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isDark) SuccessGreenContainerDark else SuccessGreenContainerLight
+                ),
+                border = BorderStroke(1.dp, SuccessGreen.copy(alpha = 0.5f))
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -162,6 +171,7 @@ fun UploadScreen(
                                 onUploadSuccessRefresh()
                             },
                             shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                             modifier = Modifier.testTag("upload_another_button")
                         ) {
                             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -174,7 +184,7 @@ fun UploadScreen(
             Spacer(modifier = Modifier.height(20.dp))
         }
 
-        // Image Picker Area
+        // Image Picker Area with Solid Surface and Crisp Border
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -184,8 +194,9 @@ fun UploadScreen(
                     )
                 }
                 .testTag("image_picker_card"),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
             if (uiState.selectedUri != null) {
                 Column(modifier = Modifier.padding(14.dp)) {
@@ -194,7 +205,7 @@ fun UploadScreen(
                             .fillMaxWidth()
                             .height(220.dp)
                             .clip(RoundedCornerShape(14.dp))
-                            .background(MaterialTheme.colorScheme.surface),
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
                         contentAlignment = Alignment.Center
                     ) {
                         AsyncImage(
@@ -219,6 +230,7 @@ fun UploadScreen(
                             Text(
                                 text = uiState.filename,
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1
                             )
                             Text(
@@ -234,9 +246,10 @@ fun UploadScreen(
                                 )
                             },
                             shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                             modifier = Modifier.testTag("change_image_button")
                         ) {
-                            Text("Change")
+                            Text("Change", color = MaterialTheme.colorScheme.onPrimary)
                         }
                     }
                 }
@@ -258,13 +271,14 @@ fun UploadScreen(
                             imageVector = Icons.Default.AddPhotoAlternate,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(30.dp)
                         )
                     }
                     Spacer(modifier = Modifier.height(14.dp))
                     Text(
                         text = "Tap to Select Image",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -303,9 +317,12 @@ fun UploadScreen(
                     onClick = { viewModel.onFormatSelected(format) },
                     label = { Text(format.label, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
                     shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.primary,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant
                     ),
                     modifier = Modifier.testTag("format_chip_${format.apiValue}")
                 )
@@ -321,39 +338,78 @@ fun UploadScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Email Association Field
+        // Read-Only Associated Gmail Account
         Text(
-            text = "Associated Gmail Account",
+            text = "Associated Gmail Account (Read-Only)",
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onBackground
         )
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        OutlinedTextField(
-            value = uiState.email,
-            onValueChange = { viewModel.onEmailChanged(it) },
+        val displayEmail = EmailUtils.formatDisplayGmail(uiState.email, fallback = "Authenticated Account")
+
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("upload_email_input"),
-            placeholder = { Text("person@gmail.com") },
-            leadingIcon = {
-                Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            },
-            isError = uiState.emailError != null,
-            supportingText = {
-                if (uiState.emailError != null) {
-                    Text(uiState.emailError!!, color = MaterialTheme.colorScheme.error)
-                } else {
-                    Text("Images will be linked to your account")
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Email,
+                    contentDescription = "Authenticated Gmail",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Authenticated Gmail",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = displayEmail,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
-            },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Email,
-                imeAction = ImeAction.Done
-            ),
-            shape = RoundedCornerShape(14.dp)
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Read-Only",
+                            modifier = Modifier.size(12.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Locked",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+        Text(
+            text = "Images are automatically linked to your authenticated Gmail account",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp, top = 4.dp)
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -368,9 +424,13 @@ fun UploadScreen(
             enabled = uiState.selectedUri != null && !uiState.isUploading && uiState.email.isNotBlank(),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(54.dp)
+                .height(52.dp)
                 .testTag("upload_submit_button"),
-            shape = RoundedCornerShape(14.dp)
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+            )
         ) {
             if (uiState.isUploading) {
                 CircularProgressIndicator(
@@ -379,11 +439,11 @@ fun UploadScreen(
                     color = MaterialTheme.colorScheme.onPrimary
                 )
                 Spacer(modifier = Modifier.width(10.dp))
-                Text("Uploading & Optimizing...")
+                Text("Uploading & Optimizing...", color = MaterialTheme.colorScheme.onPrimary)
             } else {
-                Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(20.dp))
+                Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onPrimary)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Upload & Optimize", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                Text("Upload & Optimize", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onPrimary)
             }
         }
 

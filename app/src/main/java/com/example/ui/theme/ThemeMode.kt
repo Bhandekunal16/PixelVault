@@ -5,7 +5,7 @@ enum class ThemeMode(
     val subtitle: String
 ) {
     SYSTEM(
-        displayName = "System",
+        displayName = "System default",
         subtitle = "Follows device appearance"
     ),
     LIGHT(

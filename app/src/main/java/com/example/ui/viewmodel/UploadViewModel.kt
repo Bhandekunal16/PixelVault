@@ -40,7 +40,7 @@ class UploadViewModel(
     init {
         viewModelScope.launch {
             authRepository.getCurrentUserEmail().collect { email ->
-                if (email != null && _uiState.value.email.isBlank()) {
+                if (email != null) {
                     _uiState.update { it.copy(email = email) }
                 }
             }
@@ -71,12 +71,7 @@ class UploadViewModel(
     }
 
     fun onEmailChanged(value: String) {
-        val trimmed = value.trim()
-        val error = if (trimmed.isNotEmpty() && !ValidationUtil.isValidGmail(trimmed)) {
-            "Only valid Gmail addresses are accepted"
-        } else null
-
-        _uiState.update { it.copy(email = value, emailError = error, errorMessage = null) }
+        // Registered account email is read-only throughout the entire application
     }
 
     fun upload(context: Context, onSuccess: () -> Unit = {}) {

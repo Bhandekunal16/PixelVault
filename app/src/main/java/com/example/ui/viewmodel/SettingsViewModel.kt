@@ -31,6 +31,8 @@ data class SettingsUiState(
     val lockTimeoutSeconds: Long = 0L,
     val biometricCapability: BiometricCapability = BiometricCapability.BiometricReady,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val dynamicColor: Boolean = (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S),
+    val isDynamicColorSupported: Boolean = (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S),
     val appVersion: String = "1.0.0 (API v1)"
 )
 
@@ -91,12 +93,23 @@ class SettingsViewModel(
                 _uiState.update { it.copy(themeMode = mode) }
             }
         }
+        viewModelScope.launch {
+            preferences.dynamicColorFlow.collect { dynamic ->
+                _uiState.update { it.copy(dynamicColor = dynamic) }
+            }
+        }
         refreshBiometricCapability()
     }
 
     fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch {
             preferences.setThemeMode(mode)
+        }
+    }
+
+    fun setDynamicColor(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.setDynamicColor(enabled)
         }
     }
 

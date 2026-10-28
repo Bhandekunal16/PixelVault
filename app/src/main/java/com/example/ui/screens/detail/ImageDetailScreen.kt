@@ -1,5 +1,6 @@
 package com.example.ui.screens.detail
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,7 +18,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Refresh
@@ -32,9 +32,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -57,8 +57,8 @@ import com.example.data.model.ImageMetadata
 import com.example.ui.components.ConfirmationDialog
 import com.example.ui.components.StatusBanner
 import com.example.ui.theme.ErrorRed
-import com.example.ui.theme.SuccessGreen
 import com.example.ui.viewmodel.DetailViewModel
+import com.example.util.EmailUtils
 import com.example.util.FileUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -97,15 +97,24 @@ fun ImageDetailScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
                     Text(
                         text = metadata.filename ?: "Image Detail",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
+                    actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
                 navigationIcon = {
                     IconButton(
                         onClick = onNavigateBack,
@@ -154,21 +163,22 @@ fun ImageDetailScreen(
                 Spacer(modifier = Modifier.height(14.dp))
             }
 
-            // Image Preview Container
+            // Image Preview Container with Solid Card
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("detail_image_card"),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(300.dp),
+                        .height(300.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Try displaying from loaded byte array first, fallback to Coil streaming endpoint
                     val imageSource: Any? = uiState.imageBytes ?: imageBytesUrl
                     AsyncImage(
                         model = ImageRequest.Builder(context)
@@ -179,7 +189,7 @@ fun ImageDetailScreen(
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
                             .fillMaxSize()
-                            .clip(RoundedCornerShape(20.dp))
+                            .clip(RoundedCornerShape(18.dp))
                             .testTag("detail_image_view")
                     )
 
@@ -187,7 +197,7 @@ fun ImageDetailScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)),
+                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)),
                             contentAlignment = Alignment.Center
                         ) {
                             CircularProgressIndicator(
@@ -213,16 +223,17 @@ fun ImageDetailScreen(
                         .weight(1f)
                         .height(50.dp)
                         .testTag("download_image_button"),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     if (uiState.isDownloading) {
                         CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Saving...")
+                        Text("Saving...", color = MaterialTheme.colorScheme.onPrimary)
                     } else {
-                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimary)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Save to Downloads")
+                        Text("Save to Downloads", color = MaterialTheme.colorScheme.onPrimary)
                     }
                 }
 
@@ -233,23 +244,25 @@ fun ImageDetailScreen(
                         .height(50.dp)
                         .testTag("detail_delete_action_button"),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed),
+                    border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.5f)),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = ErrorRed)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Delete Image")
+                    Text("Delete Image", color = ErrorRed)
                 }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Metadata Card
+            // Metadata Card with Solid Surface and Crisp Border
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("metadata_detail_card"),
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Text(
@@ -288,7 +301,7 @@ fun ImageDetailScreen(
                     }
 
                     if (!metadata.email.isNullOrBlank()) {
-                        MetadataItem("Owner Account", metadata.email!!)
+                        MetadataItem("Owner Account", EmailUtils.formatDisplayGmail(metadata.email))
                     }
                 }
             }

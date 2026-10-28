@@ -27,6 +27,7 @@ class AppPreferences(private val context: Context) {
         private val KEY_APP_LOCK_ENABLED = booleanPreferencesKey("app_lock_enabled")
         private val KEY_LOCK_TIMEOUT_SECONDS = androidx.datastore.preferences.core.longPreferencesKey("lock_timeout_seconds")
         private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
+        private val KEY_DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
 
         // Default configured backend server path
         const val DEFAULT_BASE_URL = "http://147.224.251.137:8001/"
@@ -130,6 +131,16 @@ class AppPreferences(private val context: Context) {
     suspend fun setThemeMode(mode: ThemeMode) {
         context.dataStore.edit { prefs ->
             prefs[KEY_THEME_MODE] = mode.name
+        }
+    }
+
+    val dynamicColorFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_DYNAMIC_COLOR] ?: (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S)
+    }
+
+    suspend fun setDynamicColor(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_DYNAMIC_COLOR] = enabled
         }
     }
 }

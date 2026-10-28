@@ -2,6 +2,7 @@ package com.example.ui.screens.lock
 
 import android.app.Activity
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,7 +33,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -127,22 +127,24 @@ fun AppLockScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Hero Lock Emblem
-            Box(
-                modifier = Modifier
-                    .size(96.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
+            // Hero Lock Emblem with Solid Surface and Border
+            Surface(
+                modifier = Modifier.size(96.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Lock,
-                    contentDescription = "App Locked",
-                    modifier = Modifier.size(48.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "App Locked",
+                        modifier = Modifier.size(44.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -165,14 +167,11 @@ fun AppLockScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Capability Badge
+            // Capability Badge with Solid Surface
             Surface(
                 shape = RoundedCornerShape(20.dp),
-                color = if (capability.canAuthenticate) {
-                    MaterialTheme.colorScheme.secondaryContainer
-                } else {
-                    MaterialTheme.colorScheme.errorContainer
-                },
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                 modifier = Modifier.testTag("lock_capability_badge")
             ) {
                 Row(
@@ -183,21 +182,13 @@ fun AppLockScreen(
                         imageVector = if (capability.canAuthenticate) Icons.Default.Shield else Icons.Default.Warning,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
-                        tint = if (capability.canAuthenticate) {
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onErrorContainer
-                        }
+                        tint = if (capability.canAuthenticate) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = capability.displayName,
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = if (capability.canAuthenticate) {
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onErrorContainer
-                        }
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -210,7 +201,8 @@ fun AppLockScreen(
                         .fillMaxWidth()
                         .testTag("lock_error_banner"),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
                 ) {
                     Row(
                         modifier = Modifier.padding(14.dp),
@@ -248,17 +240,20 @@ fun AppLockScreen(
                     .fillMaxWidth()
                     .height(52.dp)
                     .testTag("unlock_button"),
-                shape = RoundedCornerShape(14.dp)
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
                 Icon(
                     imageVector = Icons.Default.Fingerprint,
                     contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(22.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = if (capability.canAuthenticate) "Unlock with Biometrics / PIN" else "Unlock Vault (No Lock Set)",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onPrimary
                 )
             }
 
@@ -276,15 +271,17 @@ fun AppLockScreen(
                         .fillMaxWidth()
                         .height(48.dp)
                         .testTag("enroll_device_lock_button"),
-                    shape = RoundedCornerShape(14.dp)
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Settings,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Set Up Screen Lock in Settings")
+                    Text("Set Up Screen Lock in Settings", color = MaterialTheme.colorScheme.onSurface)
                 }
             }
 
@@ -298,6 +295,7 @@ fun AppLockScreen(
                     .height(48.dp)
                     .testTag("lock_logout_button"),
                 shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = MaterialTheme.colorScheme.error
                 )
@@ -305,10 +303,11 @@ fun AppLockScreen(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Logout,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.error
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Log Out to Switch Account")
+                Text("Log Out to Switch Account", color = MaterialTheme.colorScheme.error)
             }
         }
     }

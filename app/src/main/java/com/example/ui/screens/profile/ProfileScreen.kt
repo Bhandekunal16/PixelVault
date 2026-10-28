@@ -2,7 +2,9 @@ package com.example.ui.screens.profile
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,8 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockClock
 import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Warning
@@ -44,8 +43,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -64,6 +65,7 @@ import com.example.security.BiometricCapability
 import com.example.ui.components.ConfirmationDialog
 import com.example.ui.theme.ThemeMode
 import com.example.ui.viewmodel.SettingsViewModel
+import com.example.util.EmailUtils
 
 @Composable
 fun ProfileScreen(
@@ -109,7 +111,7 @@ fun ProfileScreen(
             color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-            text = "Manage your account, device security, and payload encryption",
+            text = "Manage your account, appearance theme, device security, and encryption",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -122,7 +124,8 @@ fun ProfileScreen(
                 .fillMaxWidth()
                 .testTag("profile_user_card"),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
             Row(
                 modifier = Modifier.padding(18.dp),
@@ -145,8 +148,9 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.width(16.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
+                    val formattedEmail = EmailUtils.formatDisplayGmail(uiState.userEmail, fallback = "Guest User")
                     Text(
-                        text = uiState.userEmail ?: "Guest User",
+                        text = formattedEmail,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -157,17 +161,46 @@ fun ProfileScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.secondaryContainer,
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(top = 4.dp)
                     ) {
-                        Text(
-                            text = "ROLE: ${uiState.userRole.uppercase()}",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                        ) {
+                            Text(
+                                text = "ROLE: ${uiState.userRole.uppercase()}",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = "Read-Only Account",
+                                    modifier = Modifier.size(10.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "READ-ONLY",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -181,7 +214,8 @@ fun ProfileScreen(
                 .fillMaxWidth()
                 .testTag("theme_settings_card"),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
                 Row(
@@ -204,7 +238,7 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "Choose whether ImageVault displays in Dark, Light, or automatically follows your device system theme.",
+                    text = "Choose between pure solid Dark theme, clean Light theme, or automatically match device appearance.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -233,12 +267,12 @@ fun ProfileScreen(
                             color = if (isSelected) {
                                 MaterialTheme.colorScheme.primaryContainer
                             } else {
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                MaterialTheme.colorScheme.surfaceVariant
                             },
                             border = if (isSelected) {
                                 BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                             } else {
-                                BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                                BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                             }
                         ) {
                             Column(
@@ -274,21 +308,62 @@ fun ProfileScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                if (uiState.isDynamicColorSupported) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Dynamic Color (Material You)",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Sample accent tones dynamically from your device wallpaper (Android 12+)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Switch(
+                            checked = uiState.dynamicColor,
+                            onCheckedChange = { viewModel.setDynamicColor(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                            modifier = Modifier.testTag("dynamic_color_switch")
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                val colorStyleDesc = if (uiState.dynamicColor && uiState.isDynamicColorSupported) {
+                    "Material You wallpaper colors"
+                } else {
+                    "Curated solid brand palette"
+                }
 
                 val activeThemeDescription = when (uiState.themeMode) {
                     ThemeMode.SYSTEM -> if (isSystemDark) {
-                        "System default active (currently Dark theme)"
+                        "System default active (currently Dark mode) • $colorStyleDesc"
                     } else {
-                        "System default active (currently Light theme)"
+                        "System default active (currently Light mode) • $colorStyleDesc"
                     }
-                    ThemeMode.LIGHT -> "Light theme active"
-                    ThemeMode.DARK -> "Dark theme active"
+                    ThemeMode.LIGHT -> "Light mode active • $colorStyleDesc"
+                    ThemeMode.DARK -> "Dark mode active • $colorStyleDesc"
                 }
 
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
@@ -309,7 +384,8 @@ fun ProfileScreen(
                 .fillMaxWidth()
                 .testTag("app_lock_settings_card"),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
                 Row(
@@ -329,7 +405,8 @@ fun ProfileScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Biometric & Device Lock",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
 
@@ -338,6 +415,10 @@ fun ProfileScreen(
                         onCheckedChange = { isChecked ->
                             viewModel.setAppLockEnabled(isChecked)
                         },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary
+                        ),
                         modifier = Modifier.testTag("app_lock_switch")
                     )
                 }
@@ -354,12 +435,9 @@ fun ProfileScreen(
 
                 // Hardware Status Badge
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (uiState.biometricCapability.canAuthenticate) {
-                        MaterialTheme.colorScheme.secondaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.errorContainer
-                    },
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                     modifier = Modifier.testTag("status_capability_badge")
                 ) {
                     Row(
@@ -370,21 +448,13 @@ fun ProfileScreen(
                             imageVector = if (uiState.biometricCapability.canAuthenticate) Icons.Default.Shield else Icons.Default.Warning,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
-                            tint = if (uiState.biometricCapability.canAuthenticate) {
-                                MaterialTheme.colorScheme.onSecondaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onErrorContainer
-                            }
+                            tint = if (uiState.biometricCapability.canAuthenticate) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = uiState.biometricCapability.displayName,
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = if (uiState.biometricCapability.canAuthenticate) {
-                                MaterialTheme.colorScheme.onSecondaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onErrorContainer
-                            }
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
@@ -397,11 +467,12 @@ fun ProfileScreen(
                             context.startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS))
                         },
                         shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                         modifier = Modifier.testTag("setup_screen_lock_button")
                     ) {
-                        Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Configure Device Screen Lock")
+                        Text("Configure Device Screen Lock", color = MaterialTheme.colorScheme.onSurface)
                     }
                 }
 
@@ -433,12 +504,16 @@ fun ProfileScreen(
                                 selected = isSelected,
                                 onClick = { viewModel.setLockTimeoutSeconds(seconds) },
                                 label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
                                 modifier = Modifier
                                     .weight(1f)
                                     .testTag("timeout_option_$seconds"),
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    selectedLabelColor = MaterialTheme.colorScheme.primary,
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             )
                         }
@@ -454,9 +529,9 @@ fun ProfileScreen(
                             .fillMaxWidth()
                             .testTag("lock_now_button")
                     ) {
-                        Icon(Icons.Default.LockClock, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.LockClock, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimary)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Lock Vault Now")
+                        Text("Lock Vault Now", color = MaterialTheme.colorScheme.onPrimary)
                     }
                 }
             }
@@ -470,7 +545,8 @@ fun ProfileScreen(
                 .fillMaxWidth()
                 .testTag("encryption_settings_card"),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
                 Row(
@@ -486,7 +562,8 @@ fun ProfileScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Response Decryption",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
 
@@ -495,6 +572,10 @@ fun ProfileScreen(
                         onCheckedChange = { isChecked ->
                             viewModel.setEncryptionConfig(isChecked, secretInput)
                         },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary
+                        ),
                         modifier = Modifier.testTag("encryption_toggle")
                     )
                 }
@@ -521,7 +602,13 @@ fun ProfileScreen(
                         label = { Text("AES Secret Key (Hex or UTF-8)") },
                         placeholder = { Text("Enter shared secret key") },
                         singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                        )
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
@@ -553,9 +640,9 @@ fun ProfileScreen(
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.testTag("profile_logout_button")
             ) {
-                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(16.dp))
+                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onError)
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Log Out")
+                Text("Log Out", color = MaterialTheme.colorScheme.onError)
             }
         }
 

@@ -81,4 +81,22 @@ class ComposeRobolectricUiTest {
         composeTestRule.onNodeWithTag("confirm_dialog_button").performClick()
         assertTrue(confirmed)
     }
+
+    @Test
+    fun `account info row displays read-only formatted gmail address without trailing noise`() {
+        val rawEmail = "bhandekunal16@gmail.com_trailingdata123"
+        val formattedEmail = com.example.util.EmailUtils.formatDisplayGmail(rawEmail)
+        composeTestRule.setContent {
+            MyApplicationTheme {
+                com.example.ui.screens.home.AccountInfoRow(
+                    label = "Email",
+                    value = formattedEmail
+                )
+            }
+        }
+
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Email").assertIsDisplayed()
+        composeTestRule.onNodeWithText("bhandekunal16@gmail.com").assertIsDisplayed()
+    }
 }

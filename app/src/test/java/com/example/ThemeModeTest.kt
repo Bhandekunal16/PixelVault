@@ -34,4 +34,11 @@ class ThemeModeTest {
         assertTrue(ThemeMode.DARK.isDark(systemInDarkTheme = true))
         assertTrue(ThemeMode.DARK.isDark(systemInDarkTheme = false))
     }
+
+    @Test
+    fun `test ThemeMode display names and subtitles`() {
+        assertEquals("System default", ThemeMode.SYSTEM.displayName)
+        assertEquals("Light", ThemeMode.LIGHT.displayName)
+        assertEquals("Dark", ThemeMode.DARK.displayName)
+    }
 }

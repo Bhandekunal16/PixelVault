@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,9 +17,12 @@ import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Collections
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +33,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import com.example.data.model.ImageMetadata
 import com.example.data.preferences.AppPreferences
 import com.example.ui.navigation.BottomNavTab
@@ -73,66 +79,88 @@ fun MainScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            NavigationBar(
-                modifier = Modifier
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-                    .testTag("main_bottom_nav_bar")
-            ) {
-                // Home Tab
-                NavigationBarItem(
-                    selected = currentTab == BottomNavTab.Home.route,
-                    onClick = { currentTab = BottomNavTab.Home.route },
-                    icon = {
-                        Icon(
-                            if (currentTab == BottomNavTab.Home.route) Icons.Default.Dashboard else Icons.Outlined.Dashboard,
-                            contentDescription = "Dashboard"
-                        )
-                    },
-                    label = { Text("Dashboard") },
-                    modifier = Modifier.testTag("nav_tab_dashboard")
-                )
+            Box {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    tonalElevation = 0.dp,
+                    modifier = Modifier
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .testTag("main_bottom_nav_bar")
+                ) {
+                    val navItemColors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
 
-                // Upload Tab
-                NavigationBarItem(
-                    selected = currentTab == BottomNavTab.Upload.route,
-                    onClick = { currentTab = BottomNavTab.Upload.route },
-                    icon = {
-                        Icon(
-                            if (currentTab == BottomNavTab.Upload.route) Icons.Default.CloudUpload else Icons.Outlined.CloudUpload,
-                            contentDescription = "Upload"
-                        )
-                    },
-                    label = { Text("Upload") },
-                    modifier = Modifier.testTag("nav_tab_upload")
-                )
+                    // Home Tab
+                    NavigationBarItem(
+                        selected = currentTab == BottomNavTab.Home.route,
+                        onClick = { currentTab = BottomNavTab.Home.route },
+                        icon = {
+                            Icon(
+                                if (currentTab == BottomNavTab.Home.route) Icons.Default.Dashboard else Icons.Outlined.Dashboard,
+                                contentDescription = "Dashboard"
+                            )
+                        },
+                        label = { Text("Dashboard") },
+                        colors = navItemColors,
+                        modifier = Modifier.testTag("nav_tab_dashboard")
+                    )
 
-                // Images Tab
-                NavigationBarItem(
-                    selected = currentTab == BottomNavTab.Images.route,
-                    onClick = { currentTab = BottomNavTab.Images.route },
-                    icon = {
-                        Icon(
-                            if (currentTab == BottomNavTab.Images.route) Icons.Default.Collections else Icons.Outlined.Collections,
-                            contentDescription = "My Images"
-                        )
-                    },
-                    label = { Text("My Images") },
-                    modifier = Modifier.testTag("nav_tab_images")
-                )
+                    // Upload Tab
+                    NavigationBarItem(
+                        selected = currentTab == BottomNavTab.Upload.route,
+                        onClick = { currentTab = BottomNavTab.Upload.route },
+                        icon = {
+                            Icon(
+                                if (currentTab == BottomNavTab.Upload.route) Icons.Default.CloudUpload else Icons.Outlined.CloudUpload,
+                                contentDescription = "Upload"
+                            )
+                        },
+                        label = { Text("Upload") },
+                        colors = navItemColors,
+                        modifier = Modifier.testTag("nav_tab_upload")
+                    )
 
-                // Profile Tab
-                NavigationBarItem(
-                    selected = currentTab == BottomNavTab.Profile.route,
-                    onClick = { currentTab = BottomNavTab.Profile.route },
-                    icon = {
-                        Icon(
-                            if (currentTab == BottomNavTab.Profile.route) Icons.Default.Settings else Icons.Outlined.Settings,
-                            contentDescription = "Settings"
-                        )
-                    },
-                    label = { Text("Settings") },
-                    modifier = Modifier.testTag("nav_tab_profile")
+                    // Images Tab
+                    NavigationBarItem(
+                        selected = currentTab == BottomNavTab.Images.route,
+                        onClick = { currentTab = BottomNavTab.Images.route },
+                        icon = {
+                            Icon(
+                                if (currentTab == BottomNavTab.Images.route) Icons.Default.Collections else Icons.Outlined.Collections,
+                                contentDescription = "My Images"
+                            )
+                        },
+                        label = { Text("My Images") },
+                        colors = navItemColors,
+                        modifier = Modifier.testTag("nav_tab_images")
+                    )
+
+                    // Profile Tab
+                    NavigationBarItem(
+                        selected = currentTab == BottomNavTab.Profile.route,
+                        onClick = { currentTab = BottomNavTab.Profile.route },
+                        icon = {
+                            Icon(
+                                if (currentTab == BottomNavTab.Profile.route) Icons.Default.Settings else Icons.Outlined.Settings,
+                                contentDescription = "Settings"
+                            )
+                        },
+                        label = { Text("Settings") },
+                        colors = navItemColors,
+                        modifier = Modifier.testTag("nav_tab_profile")
+                    )
+                }
+                HorizontalDivider(
+                    thickness = 1.dp,
+                    color = MaterialTheme.colorScheme.outline
                 )
             }
         }

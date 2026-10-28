@@ -1,5 +1,6 @@
 package com.example.ui.screens.images
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,25 +19,20 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddPhotoAlternate
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckBox
-import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -64,6 +60,7 @@ import com.example.ui.components.EmptyStateCard
 import com.example.ui.components.FullScreenLoading
 import com.example.ui.components.StatusBanner
 import com.example.ui.viewmodel.ImagesViewModel
+import com.example.util.EmailUtils
 import com.example.util.FileUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -132,7 +129,11 @@ fun ImagesListScreen(
                             onClick = { viewModel.selectAll() },
                             modifier = Modifier.testTag("select_all_images_button")
                         ) {
-                            Icon(Icons.Default.SelectAll, contentDescription = "Select All")
+                            Icon(
+                                Icons.Default.SelectAll,
+                                contentDescription = "Select All",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                         IconButton(
                             onClick = { showDeleteConfirmation = true },
@@ -142,14 +143,18 @@ fun ImagesListScreen(
                             Icon(
                                 Icons.Default.Delete,
                                 contentDescription = "Delete",
-                                tint = if (uiState.selectedIds.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                tint = if (uiState.selectedIds.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline
                             )
                         }
                         IconButton(
                             onClick = { viewModel.clearSelection() },
                             modifier = Modifier.testTag("exit_multiselect_button")
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Cancel Selection")
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Cancel Selection",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     } else {
                         IconButton(
@@ -157,13 +162,21 @@ fun ImagesListScreen(
                             enabled = uiState.images.isNotEmpty(),
                             modifier = Modifier.testTag("enter_multiselect_button")
                         ) {
-                            Icon(Icons.Default.CheckBox, contentDescription = "Select Multiple")
+                            Icon(
+                                Icons.Default.CheckBox,
+                                contentDescription = "Select Multiple",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                         IconButton(
                             onClick = { viewModel.loadImages(isRefresh = true) },
                             modifier = Modifier.testTag("refresh_images_button")
                         ) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = "Refresh",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
@@ -192,9 +205,10 @@ fun ImagesListScreen(
             if (uiState.isLoading && uiState.images.isEmpty()) {
                 FullScreenLoading(text = "Loading your images...")
             } else if (uiState.images.isEmpty()) {
+                val displayEmail = EmailUtils.formatDisplayGmail(uiState.userEmail, fallback = "your account")
                 EmptyStateCard(
                     title = "No Images Found",
-                    description = "No image records found for ${uiState.userEmail}. Upload images to populate your vault.",
+                    description = "No image records found for $displayEmail. Upload images to populate your vault.",
                     icon = Icons.Default.Image,
                     actionLabel = "Upload Image",
                     onAction = onNavigateToUpload,
@@ -253,7 +267,11 @@ fun ImageListItemCard(
             .testTag("image_item_card_${image.effectiveId}"),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surface
+            containerColor = if (isSelected) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
+        ),
+        border = BorderStroke(
+            width = if (isSelected) 2.dp else 1.dp,
+            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
         )
     ) {
         Row(
@@ -267,6 +285,10 @@ fun ImageListItemCard(
                 Checkbox(
                     checked = isSelected,
                     onCheckedChange = { onToggleSelection() },
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = MaterialTheme.colorScheme.primary,
+                        uncheckedColor = MaterialTheme.colorScheme.outline
+                    ),
                     modifier = Modifier.testTag("checkbox_${image.effectiveId}")
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -298,6 +320,7 @@ fun ImageListItemCard(
                 Text(
                     text = image.filename ?: "image_${image.effectiveId}",
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -310,12 +333,13 @@ fun ImageListItemCard(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.secondaryContainer
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                     ) {
                         Text(
                             text = image.effectiveFormat,
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }

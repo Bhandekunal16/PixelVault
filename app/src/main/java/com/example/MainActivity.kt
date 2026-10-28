@@ -101,7 +101,13 @@ class MainActivity : FragmentActivity() {
 
         setContent {
             val themeMode by preferences.themeModeFlow.collectAsStateWithLifecycle(initialValue = ThemeMode.SYSTEM)
-            MyApplicationTheme(themeMode = themeMode) {
+            val dynamicColor by preferences.dynamicColorFlow.collectAsStateWithLifecycle(
+                initialValue = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+            )
+            MyApplicationTheme(
+                themeMode = themeMode,
+                dynamicColor = dynamicColor
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

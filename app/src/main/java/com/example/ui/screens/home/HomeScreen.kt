@@ -1,5 +1,6 @@
 package com.example.ui.screens.home
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,16 +22,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.Collections
-import androidx.compose.material.icons.filled.DataUsage
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -54,14 +55,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.data.model.ImageMetadata
 import com.example.ui.components.EmptyStateCard
-import com.example.ui.components.StatPill
 import com.example.ui.components.StatusBanner
 import com.example.ui.viewmodel.DashboardViewModel
+import com.example.util.EmailUtils
 import com.example.util.FileUtils
 
 @Composable
@@ -94,18 +94,17 @@ fun HomeScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "ImageVault",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary
                 )
+                val displayEmail = EmailUtils.formatDisplayGmail(uiState.userEmail)
                 Text(
-                    text = if (uiState.userEmail.isNotBlank()) "Welcome, ${uiState.userEmail}" else "Welcome Back",
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    text = if (displayEmail.isNotBlank()) "Welcome, $displayEmail" else "Welcome Back",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onBackground
                 )
             }
             Row {
@@ -113,13 +112,21 @@ fun HomeScreen(
                     onClick = { viewModel.loadDashboardData() },
                     modifier = Modifier.testTag("refresh_dashboard_button")
                 ) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = "Refresh",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 IconButton(
                     onClick = { viewModel.logout(onLogout) },
                     modifier = Modifier.testTag("logout_dashboard_button")
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Logout", tint = MaterialTheme.colorScheme.error)
+                    Icon(
+                        Icons.AutoMirrored.Filled.Logout,
+                        contentDescription = "Logout",
+                        tint = MaterialTheme.colorScheme.error
+                    )
                 }
             }
         }
@@ -135,13 +142,14 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // Stats Overview Card
+        // Stats Overview Card with Solid Surface and Crisp Border
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("dashboard_stats_card"),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Row(
@@ -153,13 +161,13 @@ fun HomeScreen(
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
-                                .background(MaterialTheme.colorScheme.primary, CircleShape),
+                                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.CloudDone,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimary,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -167,7 +175,7 @@ fun HomeScreen(
                         Text(
                             text = "Cloud Storage Vault",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     if (uiState.isLoading) {
@@ -189,12 +197,12 @@ fun HomeScreen(
                         Text(
                             text = "${uiState.totalImagesCount}",
                             style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = "Total Images",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
@@ -202,12 +210,12 @@ fun HomeScreen(
                         Text(
                             text = FileUtils.formatBytes(uiState.totalStoredBytes),
                             style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = "Stored Size",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
@@ -220,7 +228,7 @@ fun HomeScreen(
                         Text(
                             text = "Optimized",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -229,7 +237,8 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(14.dp))
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -245,7 +254,7 @@ fun HomeScreen(
                             Text(
                                 text = "Saved ${FileUtils.formatBytes(uiState.totalSavingsBytes)} via image optimization",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -266,11 +275,17 @@ fun HomeScreen(
                     .weight(1f)
                     .height(48.dp)
                     .testTag("dashboard_quick_upload_button"),
-                shape = RoundedCornerShape(14.dp)
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
-                Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(
+                    Icons.Default.AddPhotoAlternate,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onPrimary
+                )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Upload Image")
+                Text("Upload Image", color = MaterialTheme.colorScheme.onPrimary)
             }
 
             OutlinedButton(
@@ -279,11 +294,17 @@ fun HomeScreen(
                     .weight(1f)
                     .height(48.dp)
                     .testTag("dashboard_view_all_button"),
-                shape = RoundedCornerShape(14.dp)
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
             ) {
-                Icon(Icons.Default.Collections, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(
+                    Icons.Default.Collections,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("View All (${uiState.totalImagesCount})")
+                Text("View All (${uiState.totalImagesCount})", color = MaterialTheme.colorScheme.onSurface)
             }
         }
 
@@ -305,7 +326,7 @@ fun HomeScreen(
                     onClick = onNavigateToImages,
                     modifier = Modifier.testTag("recent_images_see_all")
                 ) {
-                    Text("See All")
+                    Text("See All", color = MaterialTheme.colorScheme.primary)
                 }
             }
         }
@@ -344,7 +365,8 @@ fun HomeScreen(
                 .fillMaxWidth()
                 .testTag("dashboard_account_card"),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -362,7 +384,7 @@ fun HomeScreen(
                     )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
-                AccountInfoRow("Email", uiState.userEmail)
+                AccountInfoRow("Email", EmailUtils.formatDisplayGmail(uiState.userEmail))
                 if (uiState.userId.isNotBlank()) {
                     AccountInfoRow("User ID", uiState.userId)
                 }
@@ -390,7 +412,8 @@ fun RecentImageCard(
             .clickable(onClick = onClick)
             .testTag("recent_image_card_${image.effectiveId}"),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     ) {
         Column {
             Box(
@@ -409,10 +432,11 @@ fun RecentImageCard(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
-                // Format badge
+                // Solid Format badge
                 Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(6.dp)
@@ -420,7 +444,7 @@ fun RecentImageCard(
                     Text(
                         text = image.effectiveFormat,
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
@@ -430,6 +454,7 @@ fun RecentImageCard(
                 Text(
                     text = image.filename ?: "Untitled Image",
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -461,8 +486,9 @@ fun AccountInfoRow(label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 3.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
@@ -472,9 +498,7 @@ fun AccountInfoRow(label: String, value: String) {
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }
