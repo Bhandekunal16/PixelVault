@@ -60,6 +60,7 @@ import com.example.ui.theme.ErrorRed
 import com.example.ui.viewmodel.DetailViewModel
 import com.example.util.EmailUtils
 import com.example.util.FileUtils
+import com.example.util.rememberHapticHelper
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,6 +71,7 @@ fun ImageDetailScreen(
     onNavigateBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val haptic = rememberHapticHelper()
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -117,7 +119,10 @@ fun ImageDetailScreen(
                 ),
                 navigationIcon = {
                     IconButton(
-                        onClick = onNavigateBack,
+                        onClick = {
+                            haptic.navigation()
+                            onNavigateBack()
+                        },
                         modifier = Modifier.testTag("detail_back_button")
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -125,13 +130,19 @@ fun ImageDetailScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = { viewModel.fetchImageBytes(metadata.effectiveId) },
+                        onClick = {
+                            haptic.click()
+                            viewModel.fetchImageBytes(metadata.effectiveId)
+                        },
                         modifier = Modifier.testTag("detail_refresh_button")
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = "Reload")
                     }
                     IconButton(
-                        onClick = { showDeleteConfirm = true },
+                        onClick = {
+                            haptic.click()
+                            showDeleteConfirm = true
+                        },
                         modifier = Modifier.testTag("detail_delete_button")
                     ) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
@@ -217,7 +228,10 @@ fun ImageDetailScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Button(
-                    onClick = { viewModel.downloadImage(context) },
+                    onClick = {
+                        haptic.click()
+                        viewModel.downloadImage(context)
+                    },
                     enabled = !uiState.isDownloading && (uiState.imageBytes != null),
                     modifier = Modifier
                         .weight(1f)
@@ -238,7 +252,10 @@ fun ImageDetailScreen(
                 }
 
                 OutlinedButton(
-                    onClick = { showDeleteConfirm = true },
+                    onClick = {
+                        haptic.click()
+                        showDeleteConfirm = true
+                    },
                     modifier = Modifier
                         .weight(1f)
                         .height(50.dp)

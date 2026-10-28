@@ -62,6 +62,7 @@ import com.example.ui.components.StatusBanner
 import com.example.ui.viewmodel.ImagesViewModel
 import com.example.util.EmailUtils
 import com.example.util.FileUtils
+import com.example.util.rememberHapticHelper
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,6 +73,7 @@ fun ImagesListScreen(
     onImageSelected: (ImageMetadata) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val haptic = rememberHapticHelper()
     var showDeleteConfirmation by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -126,7 +128,10 @@ fun ImagesListScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (uiState.isMultiSelectMode) {
                         IconButton(
-                            onClick = { viewModel.selectAll() },
+                            onClick = {
+                                haptic.tick()
+                                viewModel.selectAll()
+                            },
                             modifier = Modifier.testTag("select_all_images_button")
                         ) {
                             Icon(
@@ -136,7 +141,10 @@ fun ImagesListScreen(
                             )
                         }
                         IconButton(
-                            onClick = { showDeleteConfirmation = true },
+                            onClick = {
+                                haptic.click()
+                                showDeleteConfirmation = true
+                            },
                             enabled = uiState.selectedIds.isNotEmpty() && !uiState.isDeleting,
                             modifier = Modifier.testTag("delete_selected_images_button")
                         ) {
@@ -147,7 +155,10 @@ fun ImagesListScreen(
                             )
                         }
                         IconButton(
-                            onClick = { viewModel.clearSelection() },
+                            onClick = {
+                                haptic.tick()
+                                viewModel.clearSelection()
+                            },
                             modifier = Modifier.testTag("exit_multiselect_button")
                         ) {
                             Icon(
@@ -158,7 +169,10 @@ fun ImagesListScreen(
                         }
                     } else {
                         IconButton(
-                            onClick = { viewModel.toggleMultiSelectMode() },
+                            onClick = {
+                                haptic.tick()
+                                viewModel.toggleMultiSelectMode()
+                            },
                             enabled = uiState.images.isNotEmpty(),
                             modifier = Modifier.testTag("enter_multiselect_button")
                         ) {
@@ -169,7 +183,10 @@ fun ImagesListScreen(
                             )
                         }
                         IconButton(
-                            onClick = { viewModel.loadImages(isRefresh = true) },
+                            onClick = {
+                                haptic.click()
+                                viewModel.loadImages(isRefresh = true)
+                            },
                             modifier = Modifier.testTag("refresh_images_button")
                         ) {
                             Icon(
@@ -231,11 +248,16 @@ fun ImagesListScreen(
                             baseUrl = baseUrl,
                             isSelected = uiState.selectedIds.contains(image.effectiveId),
                             isMultiSelectMode = uiState.isMultiSelectMode,
-                            onToggleSelection = { viewModel.toggleSelection(image.effectiveId) },
+                            onToggleSelection = {
+                                haptic.tick()
+                                viewModel.toggleSelection(image.effectiveId)
+                            },
                             onClick = {
                                 if (uiState.isMultiSelectMode) {
+                                    haptic.tick()
                                     viewModel.toggleSelection(image.effectiveId)
                                 } else {
+                                    haptic.click()
                                     onImageSelected(image)
                                 }
                             }

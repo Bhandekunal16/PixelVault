@@ -47,6 +47,7 @@ import com.example.ui.viewmodel.DetailViewModel
 import com.example.ui.viewmodel.ImagesViewModel
 import com.example.ui.viewmodel.SettingsViewModel
 import com.example.ui.viewmodel.UploadViewModel
+import com.example.util.rememberHapticHelper
 
 @Composable
 fun MainScreen(
@@ -59,6 +60,7 @@ fun MainScreen(
     onLogout: () -> Unit
 ) {
     val baseUrl by preferences.baseUrlFlow.collectAsState(initial = AppPreferences.DEFAULT_BASE_URL)
+    val haptic = rememberHapticHelper()
     var currentTab by rememberSaveable { mutableStateOf<String>(BottomNavTab.Home.route) }
     var selectedImageForDetail by rememberSaveable { mutableStateOf<ImageMetadata?>(null) }
 
@@ -101,7 +103,12 @@ fun MainScreen(
                     // Home Tab
                     NavigationBarItem(
                         selected = currentTab == BottomNavTab.Home.route,
-                        onClick = { currentTab = BottomNavTab.Home.route },
+                        onClick = {
+                            if (currentTab != BottomNavTab.Home.route) {
+                                haptic.navigation()
+                                currentTab = BottomNavTab.Home.route
+                            }
+                        },
                         icon = {
                             Icon(
                                 if (currentTab == BottomNavTab.Home.route) Icons.Default.Dashboard else Icons.Outlined.Dashboard,
@@ -116,7 +123,12 @@ fun MainScreen(
                     // Upload Tab
                     NavigationBarItem(
                         selected = currentTab == BottomNavTab.Upload.route,
-                        onClick = { currentTab = BottomNavTab.Upload.route },
+                        onClick = {
+                            if (currentTab != BottomNavTab.Upload.route) {
+                                haptic.navigation()
+                                currentTab = BottomNavTab.Upload.route
+                            }
+                        },
                         icon = {
                             Icon(
                                 if (currentTab == BottomNavTab.Upload.route) Icons.Default.CloudUpload else Icons.Outlined.CloudUpload,
@@ -131,7 +143,12 @@ fun MainScreen(
                     // Images Tab
                     NavigationBarItem(
                         selected = currentTab == BottomNavTab.Images.route,
-                        onClick = { currentTab = BottomNavTab.Images.route },
+                        onClick = {
+                            if (currentTab != BottomNavTab.Images.route) {
+                                haptic.navigation()
+                                currentTab = BottomNavTab.Images.route
+                            }
+                        },
                         icon = {
                             Icon(
                                 if (currentTab == BottomNavTab.Images.route) Icons.Default.Collections else Icons.Outlined.Collections,
@@ -146,7 +163,12 @@ fun MainScreen(
                     // Profile Tab
                     NavigationBarItem(
                         selected = currentTab == BottomNavTab.Profile.route,
-                        onClick = { currentTab = BottomNavTab.Profile.route },
+                        onClick = {
+                            if (currentTab != BottomNavTab.Profile.route) {
+                                haptic.navigation()
+                                currentTab = BottomNavTab.Profile.route
+                            }
+                        },
                         icon = {
                             Icon(
                                 if (currentTab == BottomNavTab.Profile.route) Icons.Default.Settings else Icons.Outlined.Settings,

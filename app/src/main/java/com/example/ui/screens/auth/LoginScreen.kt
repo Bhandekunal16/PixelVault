@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import com.example.ui.components.StatusBanner
 import com.example.ui.viewmodel.AuthEvent
 import com.example.ui.viewmodel.AuthViewModel
+import com.example.util.rememberHapticHelper
 
 @Composable
 fun LoginScreen(
@@ -62,6 +63,7 @@ fun LoginScreen(
     onNavigateToDashboard: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val haptic = rememberHapticHelper()
     val focusManager = LocalFocusManager.current
     val scrollState = rememberScrollState()
 
@@ -196,7 +198,10 @@ fun LoginScreen(
                     },
                     trailingIcon = {
                         IconButton(
-                            onClick = { viewModel.togglePasswordVisibility() },
+                            onClick = {
+                                haptic.toggle()
+                                viewModel.togglePasswordVisibility()
+                            },
                             modifier = Modifier.testTag("toggle_password_visibility")
                         ) {
                             Icon(
@@ -220,6 +225,7 @@ fun LoginScreen(
                     ),
                     keyboardActions = KeyboardActions(
                         onDone = {
+                            haptic.click()
                             focusManager.clearFocus()
                             viewModel.login()
                         }
@@ -239,6 +245,7 @@ fun LoginScreen(
             // Login Button
             Button(
                 onClick = {
+                    haptic.click()
                     focusManager.clearFocus()
                     viewModel.login()
                 },
@@ -278,7 +285,10 @@ fun LoginScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 TextButton(
-                    onClick = onNavigateToRegister,
+                    onClick = {
+                        haptic.click()
+                        onNavigateToRegister()
+                    },
                     modifier = Modifier.testTag("navigate_to_register_button")
                 ) {
                     Text(

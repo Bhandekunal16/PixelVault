@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import com.example.ui.components.StatusBanner
 import com.example.ui.viewmodel.AuthEvent
 import com.example.ui.viewmodel.AuthViewModel
+import com.example.util.rememberHapticHelper
 
 @Composable
 fun RegisterScreen(
@@ -61,6 +62,7 @@ fun RegisterScreen(
     onNavigateToLogin: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val haptic = rememberHapticHelper()
     val focusManager = LocalFocusManager.current
     val scrollState = rememberScrollState()
 

@@ -66,6 +66,7 @@ import com.example.ui.components.ConfirmationDialog
 import com.example.ui.theme.ThemeMode
 import com.example.ui.viewmodel.SettingsViewModel
 import com.example.util.EmailUtils
+import com.example.util.rememberHapticHelper
 
 @Composable
 fun ProfileScreen(
@@ -73,6 +74,7 @@ fun ProfileScreen(
     onLogout: () -> Unit
 ) {
     val context = LocalContext.current
+    val haptic = rememberHapticHelper()
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
 
@@ -259,7 +261,12 @@ fun ProfileScreen(
                     themeOptions.forEach { (mode, icon, tag) ->
                         val isSelected = uiState.themeMode == mode
                         Surface(
-                            onClick = { viewModel.setThemeMode(mode) },
+                            onClick = {
+                                if (uiState.themeMode != mode) {
+                                    haptic.tick()
+                                }
+                                viewModel.setThemeMode(mode)
+                            },
                             modifier = Modifier
                                 .weight(1f)
                                 .testTag(tag),
@@ -330,7 +337,10 @@ fun ProfileScreen(
                         Spacer(modifier = Modifier.width(12.dp))
                         Switch(
                             checked = uiState.dynamicColor,
-                            onCheckedChange = { viewModel.setDynamicColor(it) },
+                            onCheckedChange = {
+                                haptic.toggle()
+                                viewModel.setDynamicColor(it)
+                            },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
                                 checkedTrackColor = MaterialTheme.colorScheme.primary,
@@ -413,6 +423,7 @@ fun ProfileScreen(
                     Switch(
                         checked = uiState.appLockEnabled,
                         onCheckedChange = { isChecked ->
+                            haptic.toggle()
                             viewModel.setAppLockEnabled(isChecked)
                         },
                         colors = SwitchDefaults.colors(
@@ -502,7 +513,12 @@ fun ProfileScreen(
                             val isSelected = uiState.lockTimeoutSeconds == seconds
                             FilterChip(
                                 selected = isSelected,
-                                onClick = { viewModel.setLockTimeoutSeconds(seconds) },
+                                onClick = {
+                                    if (uiState.lockTimeoutSeconds != seconds) {
+                                        haptic.tick()
+                                    }
+                                    viewModel.setLockTimeoutSeconds(seconds)
+                                },
                                 label = { Text(label, style = MaterialTheme.typography.labelSmall) },
                                 shape = RoundedCornerShape(10.dp),
                                 border = BorderStroke(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
@@ -522,7 +538,10 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     Button(
-                        onClick = { viewModel.lockNow() },
+                        onClick = {
+                            haptic.click()
+                            viewModel.lockNow()
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
@@ -570,6 +589,7 @@ fun ProfileScreen(
                     Switch(
                         checked = uiState.encryptionEnabled,
                         onCheckedChange = { isChecked ->
+                            haptic.toggle()
                             viewModel.setEncryptionConfig(isChecked, secretInput)
                         },
                         colors = SwitchDefaults.colors(
@@ -635,7 +655,10 @@ fun ProfileScreen(
             )
 
             Button(
-                onClick = { showLogoutConfirm = true },
+                onClick = {
+                    haptic.click()
+                    showLogoutConfirm = true
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.testTag("profile_logout_button")

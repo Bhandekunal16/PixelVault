@@ -63,6 +63,7 @@ import com.example.ui.components.StatusBanner
 import com.example.ui.viewmodel.DashboardViewModel
 import com.example.util.EmailUtils
 import com.example.util.FileUtils
+import com.example.util.rememberHapticHelper
 
 @Composable
 fun HomeScreen(
@@ -75,6 +76,7 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
+    val haptic = rememberHapticHelper()
 
     LaunchedEffect(Unit) {
         viewModel.loadDashboardData()
@@ -109,7 +111,10 @@ fun HomeScreen(
             }
             Row {
                 IconButton(
-                    onClick = { viewModel.loadDashboardData() },
+                    onClick = {
+                        haptic.click()
+                        viewModel.loadDashboardData()
+                    },
                     modifier = Modifier.testTag("refresh_dashboard_button")
                 ) {
                     Icon(
@@ -119,7 +124,10 @@ fun HomeScreen(
                     )
                 }
                 IconButton(
-                    onClick = { viewModel.logout(onLogout) },
+                    onClick = {
+                        haptic.click()
+                        viewModel.logout(onLogout)
+                    },
                     modifier = Modifier.testTag("logout_dashboard_button")
                 ) {
                     Icon(
@@ -403,13 +411,17 @@ fun RecentImageCard(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val haptic = rememberHapticHelper()
     val normalizedUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
     val imageUrl = "${normalizedUrl}image?id=${image.effectiveId}"
 
     Card(
         modifier = Modifier
             .width(180.dp)
-            .clickable(onClick = onClick)
+            .clickable {
+                haptic.click()
+                onClick()
+            }
             .testTag("recent_image_card_${image.effectiveId}"),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),

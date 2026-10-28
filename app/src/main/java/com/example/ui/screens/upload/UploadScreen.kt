@@ -65,6 +65,7 @@ import com.example.ui.theme.SuccessGreen
 import com.example.ui.theme.SuccessGreenContainerDark
 import com.example.ui.theme.SuccessGreenContainerLight
 import com.example.util.EmailUtils
+import com.example.util.rememberHapticHelper
 import com.example.ui.viewmodel.UploadViewModel
 import com.example.util.FileUtils
 
@@ -75,6 +76,7 @@ fun UploadScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val haptic = rememberHapticHelper()
     val scrollState = rememberScrollState()
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
@@ -189,6 +191,7 @@ fun UploadScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable {
+                    haptic.click()
                     photoPickerLauncher.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                     )
@@ -241,6 +244,7 @@ fun UploadScreen(
                         }
                         Button(
                             onClick = {
+                                haptic.click()
                                 photoPickerLauncher.launch(
                                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                 )
@@ -314,7 +318,12 @@ fun UploadScreen(
                 val isSelected = uiState.selectedFormat == format
                 FilterChip(
                     selected = isSelected,
-                    onClick = { viewModel.onFormatSelected(format) },
+                    onClick = {
+                        if (uiState.selectedFormat != format) {
+                            haptic.tick()
+                        }
+                        viewModel.onFormatSelected(format)
+                    },
                     label = { Text(format.label, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
                     shape = RoundedCornerShape(12.dp),
                     border = BorderStroke(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
@@ -417,7 +426,9 @@ fun UploadScreen(
         // Upload Button
         Button(
             onClick = {
+                haptic.click()
                 viewModel.upload(context) {
+                    haptic.success()
                     onUploadSuccessRefresh()
                 }
             },
