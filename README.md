@@ -32,6 +32,8 @@ The application interfaces directly with the following backend routes:
 | `GET` | `/image?id={id}` | Retrieve raw binary image data | Query param: `id=...` (Streams binary image) |
 | `DELETE` | `/image` | Delete 1 to 100 images by ID | `{"ids": ["mongo-id-1", "mongo-id-2"]}` |
 
+The backend's email-based metadata lookup omits image bytes, while image downloads return only the selected image and its response metadata. The backend also has an internal per-email storage-usage summary, but it is not exposed as an API endpoint and is not available to the app.
+
 ---
 
 ## 3. How to Start the Existing Node.js Backend
