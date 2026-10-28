@@ -140,7 +140,7 @@ fun RegisterScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "Requirement: The backend exclusively supports valid Gmail addresses (@gmail.com) and passwords of 8+ characters.",
+                    text = "Please register with a valid Gmail address (@gmail.com) and a password of at least 8 characters.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(12.dp)

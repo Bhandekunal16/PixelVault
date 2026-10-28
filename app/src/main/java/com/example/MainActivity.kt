@@ -1,16 +1,17 @@
 package com.example
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -19,10 +20,13 @@ import com.example.data.api.NetworkClient
 import com.example.data.preferences.AppPreferences
 import com.example.data.repository.AuthRepositoryImpl
 import com.example.data.repository.ImageRepositoryImpl
+import com.example.security.AppLockManager
+import com.example.security.BiometricAuthManager
 import com.example.ui.navigation.Screen
 import com.example.ui.screens.MainScreen
 import com.example.ui.screens.auth.LoginScreen
 import com.example.ui.screens.auth.RegisterScreen
+import com.example.ui.screens.lock.AppLockScreen
 import com.example.ui.screens.splash.SplashScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.AppViewModelFactory
@@ -33,21 +37,36 @@ import com.example.ui.viewmodel.ImagesViewModel
 import com.example.ui.viewmodel.SettingsViewModel
 import com.example.ui.viewmodel.UploadViewModel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private lateinit var preferences: AppPreferences
     private lateinit var networkClient: NetworkClient
     private lateinit var authRepository: AuthRepositoryImpl
     private lateinit var imageRepository: ImageRepositoryImpl
     private lateinit var viewModelFactory: AppViewModelFactory
+    private lateinit var biometricAuthManager: BiometricAuthManager
+    private lateinit var appLockManager: AppLockManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
 
         preferences = AppPreferences(applicationContext)
+        biometricAuthManager = BiometricAuthManager(applicationContext)
+        appLockManager = AppLockManager()
+
+        // If app lock is enabled and user is already logged in on cold start, lock immediately
+        lifecycleScope.launch {
+            val isLockEnabled = preferences.appLockEnabledFlow.first()
+            val isLoggedIn = preferences.isLoggedInFlow.first()
+            if (isLockEnabled && isLoggedIn) {
+                appLockManager.lockNow()
+            }
+        }
 
         // Wire dynamic encryption settings to OkHttp interceptor
         networkClient = NetworkClient(
@@ -64,7 +83,13 @@ class MainActivity : ComponentActivity() {
 
         authRepository = AuthRepositoryImpl(preferences, networkClient)
         imageRepository = ImageRepositoryImpl(preferences, networkClient)
-        viewModelFactory = AppViewModelFactory(authRepository, imageRepository, preferences)
+        viewModelFactory = AppViewModelFactory(
+            authRepository = authRepository,
+            imageRepository = imageRepository,
+            preferences = preferences,
+            biometricAuthManager = biometricAuthManager,
+            appLockManager = appLockManager
+        )
 
         val authViewModel = ViewModelProvider(this, viewModelFactory)[AuthViewModel::class.java]
         val dashboardViewModel = ViewModelProvider(this, viewModelFactory)[DashboardViewModel::class.java]
@@ -80,69 +105,117 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val navController = rememberNavController()
+                    val isLocked by appLockManager.isLocked.collectAsStateWithLifecycle()
+                    val appLockEnabled by preferences.appLockEnabledFlow.collectAsStateWithLifecycle(initialValue = false)
+                    val isLoggedIn by preferences.isLoggedInFlow.collectAsStateWithLifecycle(initialValue = false)
 
-                    NavHost(
-                        navController = navController,
-                        startDestination = Screen.Splash.route
-                    ) {
-                        composable(Screen.Splash.route) {
-                            SplashScreen(
-                                preferences = preferences,
-                                onNavigateToLogin = {
-                                    navController.navigate(Screen.Login.route) {
-                                        popUpTo(Screen.Splash.route) { inclusive = true }
-                                    }
-                                },
-                                onNavigateToMain = {
-                                    navController.navigate(Screen.Main.route) {
-                                        popUpTo(Screen.Splash.route) { inclusive = true }
-                                    }
-                                }
-                            )
-                        }
+                    // Window security flag handling
+                    LaunchedEffect(isLocked, appLockEnabled) {
+                        appLockManager.updateWindowSecurity(
+                            this@MainActivity,
+                            secure = isLocked || appLockEnabled
+                        )
+                    }
 
-                        composable(Screen.Login.route) {
-                            LoginScreen(
-                                viewModel = authViewModel,
-                                onNavigateToRegister = {
-                                    navController.navigate(Screen.Register.route)
-                                },
-                                onNavigateToDashboard = {
-                                    dashboardViewModel.loadDashboardData()
-                                    navController.navigate(Screen.Main.route) {
-                                        popUpTo(Screen.Login.route) { inclusive = true }
-                                    }
-                                }
-                            )
-                        }
-
-                        composable(Screen.Register.route) {
-                            RegisterScreen(
-                                viewModel = authViewModel,
-                                onNavigateToLogin = {
-                                    navController.popBackStack()
-                                }
-                            )
-                        }
-
-                        composable(Screen.Main.route) {
-                            MainScreen(
-                                preferences = preferences,
-                                dashboardViewModel = dashboardViewModel,
-                                uploadViewModel = uploadViewModel,
-                                imagesViewModel = imagesViewModel,
-                                detailViewModel = detailViewModel,
-                                settingsViewModel = settingsViewModel,
-                                onLogout = {
+                    if (isLoggedIn && appLockEnabled && isLocked) {
+                        AppLockScreen(
+                            authManager = biometricAuthManager,
+                            onUnlocked = {
+                                appLockManager.unlock()
+                            },
+                            onLogout = {
+                                settingsViewModel.logout {
                                     navController.navigate(Screen.Login.route) {
                                         popUpTo(0) { inclusive = true }
                                     }
                                 }
-                            )
+                            }
+                        )
+                    } else {
+                        NavHost(
+                            navController = navController,
+                            startDestination = Screen.Splash.route
+                        ) {
+                            composable(Screen.Splash.route) {
+                                SplashScreen(
+                                    preferences = preferences,
+                                    onNavigateToLogin = {
+                                        navController.navigate(Screen.Login.route) {
+                                            popUpTo(Screen.Splash.route) { inclusive = true }
+                                        }
+                                    },
+                                    onNavigateToMain = {
+                                        navController.navigate(Screen.Main.route) {
+                                            popUpTo(Screen.Splash.route) { inclusive = true }
+                                        }
+                                    }
+                                )
+                            }
+
+                            composable(Screen.Login.route) {
+                                LoginScreen(
+                                    viewModel = authViewModel,
+                                    onNavigateToRegister = {
+                                        navController.navigate(Screen.Register.route)
+                                    },
+                                    onNavigateToDashboard = {
+                                        appLockManager.unlock()
+                                        dashboardViewModel.loadDashboardData()
+                                        navController.navigate(Screen.Main.route) {
+                                            popUpTo(Screen.Login.route) { inclusive = true }
+                                        }
+                                    }
+                                )
+                            }
+
+                            composable(Screen.Register.route) {
+                                RegisterScreen(
+                                    viewModel = authViewModel,
+                                    onNavigateToLogin = {
+                                        navController.popBackStack()
+                                    }
+                                )
+                            }
+
+                            composable(Screen.Main.route) {
+                                MainScreen(
+                                    preferences = preferences,
+                                    dashboardViewModel = dashboardViewModel,
+                                    uploadViewModel = uploadViewModel,
+                                    imagesViewModel = imagesViewModel,
+                                    detailViewModel = detailViewModel,
+                                    settingsViewModel = settingsViewModel,
+                                    onLogout = {
+                                        appLockManager.reset()
+                                        navController.navigate(Screen.Login.route) {
+                                            popUpTo(0) { inclusive = true }
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        lifecycleScope.launch {
+            val isLockEnabled = preferences.appLockEnabledFlow.first()
+            val isLoggedIn = preferences.isLoggedInFlow.first()
+            val timeoutSeconds = preferences.lockTimeoutSecondsFlow.first()
+            appLockManager.onAppForegrounded(
+                isLockEnabled = isLockEnabled,
+                isLoggedIn = isLoggedIn,
+                timeoutSeconds = timeoutSeconds
+            )
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        appLockManager.onAppBackgrounded()
     }
 }

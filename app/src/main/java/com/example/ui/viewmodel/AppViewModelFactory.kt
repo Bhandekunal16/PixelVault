@@ -5,11 +5,15 @@ import androidx.lifecycle.ViewModelProvider
 import com.example.data.preferences.AppPreferences
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.ImageRepository
+import com.example.security.AppLockManager
+import com.example.security.BiometricAuthManager
 
 class AppViewModelFactory(
     private val authRepository: AuthRepository,
     private val imageRepository: ImageRepository,
-    private val preferences: AppPreferences
+    private val preferences: AppPreferences,
+    private val biometricAuthManager: BiometricAuthManager? = null,
+    private val appLockManager: AppLockManager? = null
 ) : ViewModelProvider.Factory {
 
     @Suppress("UNCHECKED_CAST")
@@ -31,7 +35,13 @@ class AppViewModelFactory(
                 DetailViewModel(imageRepository) as T
             }
             modelClass.isAssignableFrom(SettingsViewModel::class.java) -> {
-                SettingsViewModel(preferences, authRepository, imageRepository) as T
+                SettingsViewModel(
+                    preferences = preferences,
+                    authRepository = authRepository,
+                    imageRepository = imageRepository,
+                    biometricAuthManager = biometricAuthManager,
+                    appLockManager = appLockManager
+                ) as T
             }
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }

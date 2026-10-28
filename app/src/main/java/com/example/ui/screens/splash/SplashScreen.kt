@@ -81,7 +81,7 @@ fun SplashScreen(
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "Express Backend Image Cloud",
+                text = "Cloud Image Vault",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

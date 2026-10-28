@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.preferences.AppPreferences
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.ImageRepository
+import com.example.security.AppLockManager
+import com.example.security.BiometricAuthManager
+import com.example.security.BiometricCapability
 import com.example.util.Resource
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,13 +26,18 @@ data class SettingsUiState(
     val encryptionEnabled: Boolean = false,
     val encryptionSecret: String = "",
     val encryptionAlgo: String = "AES/CBC/PKCS5Padding",
+    val appLockEnabled: Boolean = false,
+    val lockTimeoutSeconds: Long = 0L,
+    val biometricCapability: BiometricCapability = BiometricCapability.BiometricReady,
     val appVersion: String = "1.0.0 (API v1)"
 )
 
 class SettingsViewModel(
     private val preferences: AppPreferences,
     private val authRepository: AuthRepository,
-    private val imageRepository: ImageRepository
+    private val imageRepository: ImageRepository,
+    private val biometricAuthManager: BiometricAuthManager? = null,
+    private val appLockManager: AppLockManager? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -66,6 +74,39 @@ class SettingsViewModel(
                 _uiState.update { it.copy(encryptionSecret = secret ?: "") }
             }
         }
+        viewModelScope.launch {
+            preferences.appLockEnabledFlow.collect { enabled ->
+                _uiState.update { it.copy(appLockEnabled = enabled) }
+            }
+        }
+        viewModelScope.launch {
+            preferences.lockTimeoutSecondsFlow.collect { seconds ->
+                _uiState.update { it.copy(lockTimeoutSeconds = seconds) }
+            }
+        }
+        refreshBiometricCapability()
+    }
+
+    fun refreshBiometricCapability() {
+        biometricAuthManager?.let { mgr ->
+            _uiState.update { it.copy(biometricCapability = mgr.checkCapability()) }
+        }
+    }
+
+    fun setAppLockEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.setAppLockEnabled(enabled)
+        }
+    }
+
+    fun setLockTimeoutSeconds(seconds: Long) {
+        viewModelScope.launch {
+            preferences.setLockTimeoutSeconds(seconds)
+        }
+    }
+
+    fun lockNow() {
+        appLockManager?.lockNow()
     }
 
     fun updateBaseUrl(newUrl: String) {
@@ -127,6 +168,7 @@ class SettingsViewModel(
 
     fun logout(onLoggedOut: () -> Unit) {
         viewModelScope.launch {
+            appLockManager?.reset()
             authRepository.logout()
             onLoggedOut()
         }

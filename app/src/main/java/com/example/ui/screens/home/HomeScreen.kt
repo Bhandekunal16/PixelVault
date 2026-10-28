@@ -243,7 +243,7 @@ fun HomeScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Saved ${FileUtils.formatBytes(uiState.totalSavingsBytes)} via backend image encoding",
+                                text = "Saved ${FileUtils.formatBytes(uiState.totalSavingsBytes)} via image optimization",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -315,7 +315,7 @@ fun HomeScreen(
         if (uiState.recentImages.isEmpty() && !uiState.isLoading) {
             EmptyStateCard(
                 title = "No Images Uploaded Yet",
-                description = "Upload photos to convert, optimize, and store them securely on your Express server.",
+                description = "Upload photos to convert, optimize, and store them securely in your cloud vault.",
                 icon = Icons.Default.Image,
                 actionLabel = "Upload First Image",
                 onAction = onNavigateToUpload
@@ -356,7 +356,7 @@ fun HomeScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Account & Node.js Session",
+                        text = "Account Details",
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -367,7 +367,6 @@ fun HomeScreen(
                     AccountInfoRow("User ID", uiState.userId)
                 }
                 AccountInfoRow("Role", uiState.userRole.uppercase())
-                AccountInfoRow("Server URL", baseUrl)
             }
         }
 

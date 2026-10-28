@@ -276,7 +276,7 @@ fun ImageDetailScreen(
 
                     MetadataItem(
                         "Optimization",
-                        if (metadata.effectiveOptimized) "Optimized by backend" else "Standard format"
+                        if (metadata.effectiveOptimized) "Optimized" else "Standard format"
                     )
 
                     if (!metadata.checksum.isNullOrBlank()) {
@@ -291,22 +291,6 @@ fun ImageDetailScreen(
                         MetadataItem("Owner Account", metadata.email!!)
                     }
                 }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Backend Notice Card
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "Backend Note: Binary bytes are retrieved from GET /image?id={id}. The server streams raw image data without JSON wrapping.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(12.dp)
-                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))

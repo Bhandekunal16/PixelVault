@@ -1,5 +1,7 @@
 package com.example.ui.screens.profile
 
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,21 +19,21 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.NetworkCheck
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockClock
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -40,6 +42,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,13 +50,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.security.BiometricCapability
 import com.example.ui.components.ConfirmationDialog
-import com.example.ui.components.StatusBanner
-import com.example.ui.theme.ErrorRed
-import com.example.ui.theme.SuccessGreen
 import com.example.ui.viewmodel.SettingsViewModel
 
 @Composable
@@ -61,17 +63,21 @@ fun ProfileScreen(
     viewModel: SettingsViewModel,
     onLogout: () -> Unit
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
 
-    var editingUrl by remember(uiState.baseUrl) { mutableStateOf(uiState.baseUrl) }
     var secretInput by remember(uiState.encryptionSecret) { mutableStateOf(uiState.encryptionSecret) }
     var showLogoutConfirm by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.refreshBiometricCapability()
+    }
 
     if (showLogoutConfirm) {
         ConfirmationDialog(
             title = "Log Out?",
-            message = "This will clear your local convenience session. As the Express backend does not maintain sessions, you can log back in at any time.",
+            message = "Are you sure you want to log out of your account?",
             confirmLabel = "Log Out",
             isDestructive = false,
             onConfirm = {
@@ -96,7 +102,7 @@ fun ProfileScreen(
             color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-            text = "Configure Express backend URL, response encryption, and inspect session info",
+            text = "Manage your account, device security, and payload encryption",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -160,135 +166,170 @@ fun ProfileScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        // Backend URL Configuration Card
+        // Device Lock & Biometric Security Card
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .testTag("server_config_card"),
+                .testTag("app_lock_settings_card"),
             shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Dns, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Express Server Base URL",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Fingerprint,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Biometric & Device Lock",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+
+                    Switch(
+                        checked = uiState.appLockEnabled,
+                        onCheckedChange = { isChecked ->
+                            viewModel.setAppLockEnabled(isChecked)
+                        },
+                        modifier = Modifier.testTag("app_lock_switch")
                     )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "Android emulator connects to host computer via http://10.0.2.2:8000/.",
+                    text = "Require fingerprint, face unlock, or device PIN/pattern to access ImageVault.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Presets
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                // Hardware Status Badge
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (uiState.biometricCapability.canAuthenticate) {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.errorContainer
+                    },
+                    modifier = Modifier.testTag("status_capability_badge")
                 ) {
-                    FilterChip(
-                        selected = editingUrl.contains("147.224.251.137"),
-                        onClick = {
-                            editingUrl = "http://147.224.251.137:8001/"
-                            viewModel.updateBaseUrl(editingUrl)
-                        },
-                        label = { Text("Server (:8001)") },
-                        modifier = Modifier.testTag("preset_server_button")
-                    )
-
-                    FilterChip(
-                        selected = editingUrl.contains("10.0.2.2"),
-                        onClick = {
-                            editingUrl = "http://10.0.2.2:8000/"
-                            viewModel.updateBaseUrl(editingUrl)
-                        },
-                        label = { Text("Emulator") },
-                        modifier = Modifier.testTag("preset_emulator_button")
-                    )
-
-                    FilterChip(
-                        selected = editingUrl.contains("localhost"),
-                        onClick = {
-                            editingUrl = "http://localhost:8000/"
-                            viewModel.updateBaseUrl(editingUrl)
-                        },
-                        label = { Text("Localhost") },
-                        modifier = Modifier.testTag("preset_localhost_button")
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (uiState.biometricCapability.canAuthenticate) Icons.Default.Shield else Icons.Default.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = if (uiState.biometricCapability.canAuthenticate) {
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onErrorContainer
+                            }
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = uiState.biometricCapability.displayName,
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = if (uiState.biometricCapability.canAuthenticate) {
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onErrorContainer
+                            }
+                        )
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                OutlinedTextField(
-                    value = editingUrl,
-                    onValueChange = { editingUrl = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("base_url_input"),
-                    label = { Text("Base URL") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = { viewModel.updateBaseUrl(editingUrl) },
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("save_base_url_button")
-                    ) {
-                        Text("Save URL")
-                    }
-
+                // If no security enrolled, provide guidance link
+                if (!uiState.biometricCapability.canAuthenticate) {
+                    Spacer(modifier = Modifier.height(10.dp))
                     OutlinedButton(
-                        onClick = { viewModel.testConnection() },
-                        enabled = !uiState.isTestingConnection,
+                        onClick = {
+                            context.startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS))
+                        },
                         shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("test_connection_button")
+                        modifier = Modifier.testTag("setup_screen_lock_button")
                     ) {
-                        if (uiState.isTestingConnection) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Testing...")
-                        } else {
-                            Icon(Icons.Default.NetworkCheck, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Ping GET /")
+                        Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Configure Device Screen Lock")
+                    }
+                }
+
+                if (uiState.appLockEnabled) {
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Auto-Lock Timeout (After Backgrounding):",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val timeouts = listOf(
+                        0L to "Immediately",
+                        30L to "30 sec",
+                        60L to "1 min",
+                        300L to "5 min"
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        timeouts.forEach { (seconds, label) ->
+                            val isSelected = uiState.lockTimeoutSeconds == seconds
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { viewModel.setLockTimeoutSeconds(seconds) },
+                                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("timeout_option_$seconds"),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            )
                         }
                     }
-                }
 
-                if (uiState.connectionTestResult != null) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    StatusBanner(
-                        message = uiState.connectionTestResult!!,
-                        isSuccess = uiState.isConnectionSuccess == true,
-                        isError = uiState.isConnectionSuccess == false
-                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Button(
+                        onClick = { viewModel.lockNow() },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("lock_now_button")
+                    ) {
+                        Icon(Icons.Default.LockClock, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Lock Vault Now")
+                    }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        // Response Encryption Card (Section 5)
+        // Response Encryption Card
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -302,7 +343,10 @@ fun ProfileScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
@@ -323,7 +367,7 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "Compatibility with Express encryption_Interceptor wrapping JSON in {\"data\":\"<ciphertext>\"}. Image bytes downloads are kept separate.",
+                    text = "Enable automatic payload decryption for encrypted data responses.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -354,35 +398,7 @@ fun ProfileScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Backend Limitations Notice Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-        ) {
-            Column(modifier = Modifier.padding(18.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Backend Security Architecture",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                    )
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "1. No Token/Session Auth: The Express API does not issue JWT tokens or cookies upon login. Login is validated directly with POST /login and stored locally for UX.\n" +
-                            "2. Unauthenticated Image Deletion: DELETE /image accepts arbitrary MongoDB IDs without ownership checks. In production, server-side ownership authorization is strongly recommended.\n" +
-                            "3. HTTPS Requirement: Use HTTPS when deploying the Express API to production.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
         // App Version & Logout
         Row(

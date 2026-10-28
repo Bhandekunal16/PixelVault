@@ -1,6 +1,6 @@
 {
   "name": "ImageVault",
-  "description": "Modern Android client for Node.js Express backend featuring image upload, multi-format conversion, optimization analytics, and secure metadata management.",
+  "description": "Modern Android client featuring cloud image upload, multi-format conversion, optimization analytics, and secure metadata management.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

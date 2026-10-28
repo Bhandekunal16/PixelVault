@@ -94,7 +94,7 @@ fun UploadScreen(
             color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-            text = "Server converts formats and applies lossless/lossy optimization up to 10 MiB",
+            text = "Convert formats and apply lossless or lossy optimization up to 10 MiB",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -285,7 +285,7 @@ fun UploadScreen(
             color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-            text = "Select destination image format for Express backend processing:",
+            text = "Select destination image format:",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -345,7 +345,7 @@ fun UploadScreen(
                 if (uiState.emailError != null) {
                     Text(uiState.emailError!!, color = MaterialTheme.colorScheme.error)
                 } else {
-                    Text("Images will be linked to this Gmail account in the Express database")
+                    Text("Images will be linked to your account")
                 }
             },
             singleLine = true,
@@ -383,7 +383,7 @@ fun UploadScreen(
             } else {
                 Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Upload to Express Backend", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                Text("Upload & Optimize", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
             }
         }
 

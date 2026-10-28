@@ -84,7 +84,7 @@ fun ImagesListScreen(
     if (showDeleteConfirmation) {
         ConfirmationDialog(
             title = "Delete ${uiState.selectedIds.size} Image${if (uiState.selectedIds.size > 1) "s" else ""}?",
-            message = "This will permanently remove the selected images from the backend storage. Note: Backend does not check ownership for deletion.",
+            message = "This will permanently remove the selected images from your vault.",
             confirmLabel = "Delete Selected",
             onConfirm = {
                 showDeleteConfirmation = false
@@ -190,7 +190,7 @@ fun ImagesListScreen(
             }
 
             if (uiState.isLoading && uiState.images.isEmpty()) {
-                FullScreenLoading(text = "Fetching user images from Express server...")
+                FullScreenLoading(text = "Loading your images...")
             } else if (uiState.images.isEmpty()) {
                 EmptyStateCard(
                     title = "No Images Found",

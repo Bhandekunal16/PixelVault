@@ -126,21 +126,6 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Backend Notice Pill
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "Backend note: API does not issue session tokens. Credentials are authenticated directly with POST /login.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(12.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
 
             // Email Field
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -165,7 +150,7 @@ fun LoginScreen(
                         if (uiState.emailError != null) {
                             Text(uiState.emailError!!, color = MaterialTheme.colorScheme.error)
                         } else {
-                            Text("Only @gmail.com accounts are supported by the backend")
+                            Text("Only @gmail.com accounts are supported")
                         }
                     },
                     singleLine = true,

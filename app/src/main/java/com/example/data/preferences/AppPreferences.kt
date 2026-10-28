@@ -23,6 +23,8 @@ class AppPreferences(private val context: Context) {
         private val KEY_ENCRYPTION_ENABLED = booleanPreferencesKey("encryption_enabled")
         private val KEY_ENCRYPTION_SECRET = stringPreferencesKey("encryption_secret")
         private val KEY_ENCRYPTION_ALGO = stringPreferencesKey("encryption_algo")
+        private val KEY_APP_LOCK_ENABLED = booleanPreferencesKey("app_lock_enabled")
+        private val KEY_LOCK_TIMEOUT_SECONDS = androidx.datastore.preferences.core.longPreferencesKey("lock_timeout_seconds")
 
         // Default configured backend server path
         const val DEFAULT_BASE_URL = "http://147.224.251.137:8001/"
@@ -96,6 +98,26 @@ class AppPreferences(private val context: Context) {
             prefs[KEY_ENCRYPTION_ENABLED] = enabled
             if (secret != null) prefs[KEY_ENCRYPTION_SECRET] = secret else prefs.remove(KEY_ENCRYPTION_SECRET)
             if (algo != null) prefs[KEY_ENCRYPTION_ALGO] = algo
+        }
+    }
+
+    val appLockEnabledFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_APP_LOCK_ENABLED] ?: false
+    }
+
+    val lockTimeoutSecondsFlow: Flow<Long> = context.dataStore.data.map { prefs ->
+        prefs[KEY_LOCK_TIMEOUT_SECONDS] ?: 0L // Default immediate (0s)
+    }
+
+    suspend fun setAppLockEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_APP_LOCK_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setLockTimeoutSeconds(seconds: Long) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_LOCK_TIMEOUT_SECONDS] = seconds
         }
     }
 }
