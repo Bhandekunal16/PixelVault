@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -25,6 +26,7 @@ class AppPreferences(private val context: Context) {
         private val KEY_ENCRYPTION_ALGO = stringPreferencesKey("encryption_algo")
         private val KEY_APP_LOCK_ENABLED = booleanPreferencesKey("app_lock_enabled")
         private val KEY_LOCK_TIMEOUT_SECONDS = androidx.datastore.preferences.core.longPreferencesKey("lock_timeout_seconds")
+        private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
 
         // Default configured backend server path
         const val DEFAULT_BASE_URL = "http://147.224.251.137:8001/"
@@ -118,6 +120,16 @@ class AppPreferences(private val context: Context) {
     suspend fun setLockTimeoutSeconds(seconds: Long) {
         context.dataStore.edit { prefs ->
             prefs[KEY_LOCK_TIMEOUT_SECONDS] = seconds
+        }
+    }
+
+    val themeModeFlow: Flow<ThemeMode> = context.dataStore.data.map { prefs ->
+        ThemeMode.fromString(prefs[KEY_THEME_MODE])
+    }
+
+    suspend fun setThemeMode(mode: ThemeMode) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_THEME_MODE] = mode.name
         }
     }
 }

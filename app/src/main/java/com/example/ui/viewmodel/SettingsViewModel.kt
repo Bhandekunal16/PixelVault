@@ -8,6 +8,7 @@ import com.example.data.repository.ImageRepository
 import com.example.security.AppLockManager
 import com.example.security.BiometricAuthManager
 import com.example.security.BiometricCapability
+import com.example.ui.theme.ThemeMode
 import com.example.util.Resource
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,6 +30,7 @@ data class SettingsUiState(
     val appLockEnabled: Boolean = false,
     val lockTimeoutSeconds: Long = 0L,
     val biometricCapability: BiometricCapability = BiometricCapability.BiometricReady,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val appVersion: String = "1.0.0 (API v1)"
 )
 
@@ -84,7 +86,18 @@ class SettingsViewModel(
                 _uiState.update { it.copy(lockTimeoutSeconds = seconds) }
             }
         }
+        viewModelScope.launch {
+            preferences.themeModeFlow.collect { mode ->
+                _uiState.update { it.copy(themeMode = mode) }
+            }
+        }
         refreshBiometricCapability()
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        viewModelScope.launch {
+            preferences.setThemeMode(mode)
+        }
     }
 
     fun refreshBiometricCapability() {

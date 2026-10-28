@@ -29,6 +29,7 @@ import com.example.ui.screens.auth.RegisterScreen
 import com.example.ui.screens.lock.AppLockScreen
 import com.example.ui.screens.splash.SplashScreen
 import com.example.ui.theme.MyApplicationTheme
+import com.example.ui.theme.ThemeMode
 import com.example.ui.viewmodel.AppViewModelFactory
 import com.example.ui.viewmodel.AuthViewModel
 import com.example.ui.viewmodel.DashboardViewModel
@@ -99,7 +100,8 @@ class MainActivity : FragmentActivity() {
         val settingsViewModel = ViewModelProvider(this, viewModelFactory)[SettingsViewModel::class.java]
 
         setContent {
-            MyApplicationTheme {
+            val themeMode by preferences.themeModeFlow.collectAsStateWithLifecycle(initialValue = ThemeMode.SYSTEM)
+            MyApplicationTheme(themeMode = themeMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
