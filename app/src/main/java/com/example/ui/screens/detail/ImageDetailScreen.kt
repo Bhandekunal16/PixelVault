@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -56,7 +58,6 @@ import coil.request.ImageRequest
 import com.example.data.model.ImageMetadata
 import com.example.ui.components.ConfirmationDialog
 import com.example.ui.components.StatusBanner
-import com.example.ui.theme.ErrorRed
 import com.example.ui.viewmodel.DetailViewModel
 import com.example.util.EmailUtils
 import com.example.util.FileUtils
@@ -222,51 +223,47 @@ fun ImageDetailScreen(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Action Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Button(
-                    onClick = {
-                        haptic.click()
-                        viewModel.downloadImage(context)
-                    },
-                    enabled = !uiState.isDownloading && (uiState.imageBytes != null),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(50.dp)
-                        .testTag("download_image_button"),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    if (uiState.isDownloading) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Saving...", color = MaterialTheme.colorScheme.onPrimary)
-                    } else {
-                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimary)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Save to Downloads", color = MaterialTheme.colorScheme.onPrimary)
-                    }
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val compactWidth = maxWidth < 380.dp
+                val downloadEnabled = !uiState.isDownloading && uiState.imageBytes != null
+                val onDownload = {
+                    haptic.click()
+                    viewModel.downloadImage(context)
+                }
+                val onDelete = {
+                    haptic.click()
+                    showDeleteConfirm = true
                 }
 
-                OutlinedButton(
-                    onClick = {
-                        haptic.click()
-                        showDeleteConfirm = true
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(50.dp)
-                        .testTag("detail_delete_action_button"),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed),
-                    border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.5f)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = ErrorRed)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Delete Image", color = ErrorRed)
+                if (compactWidth) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        DownloadActionButton(
+                            isDownloading = uiState.isDownloading,
+                            enabled = downloadEnabled,
+                            onClick = onDownload,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        DeleteActionButton(
+                            onClick = onDelete,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        DownloadActionButton(
+                            isDownloading = uiState.isDownloading,
+                            enabled = downloadEnabled,
+                            onClick = onDownload,
+                            modifier = Modifier.weight(1f)
+                        )
+                        DeleteActionButton(
+                            onClick = onDelete,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
 
@@ -325,6 +322,68 @@ fun ImageDetailScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
         }
+    }
+}
+
+@Composable
+private fun DownloadActionButton(
+    isDownloading: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
+            .height(52.dp)
+            .testTag("download_image_button"),
+        shape = RoundedCornerShape(14.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    ) {
+        if (isDownloading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Saving...", maxLines = 1, style = MaterialTheme.typography.labelLarge)
+        } else {
+            Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                "Save to Downloads",
+                maxLines = 1,
+                style = MaterialTheme.typography.labelLarge
+            )
+        }
+    }
+}
+
+@Composable
+private fun DeleteActionButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier
+            .height(52.dp)
+            .testTag("detail_delete_action_button"),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+        shape = RoundedCornerShape(14.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp)
+    ) {
+        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text("Delete Image", maxLines = 1, style = MaterialTheme.typography.labelLarge)
     }
 }
 
