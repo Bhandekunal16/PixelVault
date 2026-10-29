@@ -191,7 +191,7 @@ class ImagesViewModel(
         if (account.isBlank()) return
         _uiState.update { it.copy(isDeleting = true, errorMessage = null, deleteSuccessMessage = null) }
         deleteJob = viewModelScope.launch {
-            imageRepository.deleteImages(ids).collect { resource ->
+            imageRepository.deleteImages(ids, account).collect { resource ->
                 if (activeAccount != account) return@collect
                 when (resource) {
                     is Resource.Loading -> Unit

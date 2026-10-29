@@ -29,7 +29,9 @@ data class LoginRequest(
 
 @JsonClass(generateAdapter = true)
 data class LoginData(
-    @Json(name = "user") val user: User? = null
+    @Json(name = "user") val user: User? = null,
+    @Json(name = "accessToken") val accessToken: String? = null,
+    @Json(name = "expiresAt") val expiresAt: Long? = null
 )
 
 @JsonClass(generateAdapter = true)

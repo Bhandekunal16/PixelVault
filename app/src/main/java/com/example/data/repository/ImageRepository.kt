@@ -47,9 +47,9 @@ interface ImageRepository {
 
     suspend fun removeCachedImages(email: String, ids: List<String>)
 
-    fun getImageBytes(id: String): Flow<Resource<ByteArray>>
+    fun getImageBytes(id: String, email: String): Flow<Resource<ByteArray>>
 
-    fun deleteImages(ids: List<String>): Flow<Resource<Int>>
+    fun deleteImages(ids: List<String>, email: String): Flow<Resource<Int>>
 
     fun checkServerHealth(): Flow<Resource<Boolean>>
 
@@ -83,21 +83,18 @@ class ImageRepositoryImpl(
         val account = normalizeAccount(email)
         if (account.isBlank()) return Resource.Error("A signed-in account is required to sync images.")
 
-        val requestedAt = System.currentTimeMillis()
         return accountLock(account).withLock {
             val now = System.currentTimeMillis()
             val previousState = imageDao.getSyncState(account)
             val lastSync = previousState?.lastSuccessfulSyncAt
-            if (lastSync != null &&
-                ((!forceRefresh && now - lastSync < SYNC_FRESHNESS_MILLIS) ||
-                    (forceRefresh && lastSync >= requestedAt))
-            ) {
+            if (!forceRefresh && lastSync != null && now - lastSync < SYNC_FRESHNESS_MILLIS) {
                 return@withLock Resource.Success(Unit)
             }
 
             try {
+                val authorization = authorizationForAccount(account)
                 val api = apiService()
-                val metadata = fetchServerImages(api, account)
+                val metadata = fetchServerImages(api, authorization)
                 val entities = metadata.mapNotNull { it.toEntity(account, now) }
 
                 imageDatabase.withTransaction {
@@ -111,6 +108,9 @@ class ImageRepositoryImpl(
                     )
                 }
                 Resource.Success(Unit)
+            } catch (e: AuthSessionException) {
+                persistSyncError(account, previousState, e.message ?: "Please sign in again.")
+                Resource.Error(e.message ?: "Please sign in again.", e, 401)
             } catch (e: RemoteImageException) {
                 persistSyncError(account, previousState, e.message ?: "Image sync failed.")
                 Resource.Error(e.message ?: "Image sync failed.", e, e.statusCode)
@@ -151,10 +151,11 @@ class ImageRepositoryImpl(
 
         accountLock(account).withLock {
             try {
+                val authorization = authorizationForAccount(account)
                 val api = apiService()
                 val response = api.uploadImage(
+                    authorization = authorization,
                     image = part,
-                    email = account.toRequestBody("text/plain".toMediaTypeOrNull()),
                     format = format.apiValue.toRequestBody("text/plain".toMediaTypeOrNull())
                 )
 
@@ -177,6 +178,8 @@ class ImageRepositoryImpl(
                 }
                 imageDao.upsertImages(listOf(entity))
                 emit(Resource.Success(metadata))
+            } catch (e: AuthSessionException) {
+                emit(Resource.Error(e.message ?: "Please sign in again.", e, 401))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -190,7 +193,7 @@ class ImageRepositoryImpl(
         }
     }.flowOn(Dispatchers.IO)
 
-    override fun getImageBytes(id: String): Flow<Resource<ByteArray>> = flow {
+    override fun getImageBytes(id: String, email: String): Flow<Resource<ByteArray>> = flow {
         emit(Resource.Loading)
         if (id.isBlank()) {
             emit(Resource.Error("A valid image ID is required."))
@@ -198,7 +201,9 @@ class ImageRepositoryImpl(
         }
 
         try {
-            val response = apiService().getImageBytes(id)
+            val account = normalizeAccount(email)
+            val authorization = authorizationForAccount(account)
+            val response = apiService().getImageBytes(authorization, id)
             if (response.isSuccessful) {
                 val bytes = response.body()?.bytes()
                 if (bytes != null && bytes.isNotEmpty()) {
@@ -216,6 +221,8 @@ class ImageRepositoryImpl(
             }
         } catch (e: CancellationException) {
             throw e
+        } catch (e: AuthSessionException) {
+            emit(Resource.Error(e.message ?: "Please sign in again.", e, 401))
         } catch (e: Exception) {
             emit(Resource.Error(NetworkErrorHandler.parseException(e), e))
         }
@@ -229,7 +236,7 @@ class ImageRepositoryImpl(
         }
     }
 
-    override fun deleteImages(ids: List<String>): Flow<Resource<Int>> = flow {
+    override fun deleteImages(ids: List<String>, email: String): Flow<Resource<Int>> = flow {
         emit(Resource.Loading)
         val validIds = ids.filter(String::isNotBlank).distinct()
         if (validIds.isEmpty()) {
@@ -237,7 +244,7 @@ class ImageRepositoryImpl(
             return@flow
         }
 
-        val account = normalizeAccount(preferences.userEmailFlow.first().orEmpty())
+        val account = normalizeAccount(email)
         if (account.isBlank()) {
             emit(Resource.Error("A signed-in account is required to delete images."))
             return@flow
@@ -245,8 +252,12 @@ class ImageRepositoryImpl(
 
         accountLock(account).withLock {
             try {
+                val authorization = authorizationForAccount(account)
                 val api = apiService()
-                val response = api.deleteImages(com.example.data.model.DeleteImagesRequest(ids = validIds))
+                val response = api.deleteImages(
+                    authorization,
+                    com.example.data.model.DeleteImagesRequest(ids = validIds)
+                )
                 if (!response.isSuccessful) {
                     if (response.code() == 404 && isImageNotFound(response.errorBody()?.string())) {
                         imageDao.deleteImages(account, validIds)
@@ -266,7 +277,7 @@ class ImageRepositoryImpl(
                 if (deletedCount == validIds.size) {
                     imageDao.deleteImages(account, validIds)
                 } else {
-                    val remainingRemoteImages = fetchServerImages(api, account)
+                    val remainingRemoteImages = fetchServerImages(api, authorization)
                     val remainingIds = remainingRemoteImages.mapTo(HashSet()) { it.effectiveId }
                     val confirmedMissing = validIds.filterNot(remainingIds::contains)
                     imageDatabase.withTransaction {
@@ -290,6 +301,8 @@ class ImageRepositoryImpl(
                     }
                 }
                 emit(Resource.Success(deletedCount))
+            } catch (e: AuthSessionException) {
+                emit(Resource.Error(e.message ?: "Please sign in again.", e, 401))
             } catch (e: RemoteImageException) {
                 emit(Resource.Error(e.message ?: "Could not verify image deletion.", e, e.statusCode))
             } catch (e: CancellationException) {
@@ -323,8 +336,8 @@ class ImageRepositoryImpl(
         mimeType: String
     ): Result<Uri> = FileUtils.saveBytesToDownloads(context, bytes, filename, mimeType)
 
-    private suspend fun fetchServerImages(api: ApiService, account: String): List<ImageMetadata> {
-        val response = api.getImagesByEmail(account)
+    private suspend fun fetchServerImages(api: ApiService, authorization: String): List<ImageMetadata> {
+        val response = api.getImages(authorization)
         if (response.isSuccessful) {
             val body = response.body()
                 ?: throw RemoteImageException("The server returned an empty image-list response.")
@@ -368,6 +381,20 @@ class ImageRepositoryImpl(
         return networkClient.getApiService(baseUrl)
     }
 
+    private suspend fun authorizationForAccount(account: String): String {
+        val currentAccount = normalizeAccount(preferences.userEmailFlow.first().orEmpty())
+        val accessToken = preferences.accessTokenFlow.first()
+        if (
+            currentAccount.isBlank() ||
+            currentAccount != account ||
+            accessToken.isNullOrBlank() ||
+            !preferences.isLoggedInFlow.first()
+        ) {
+            throw AuthSessionException("Your session is unavailable or has expired. Please sign in again.")
+        }
+        return "Bearer $accessToken"
+    }
+
     private fun accountLock(account: String): Mutex =
         accountLocks.computeIfAbsent(account) { Mutex() }
 
@@ -384,6 +411,8 @@ class ImageRepositoryImpl(
         message: String,
         val statusCode: Int? = null
     ) : Exception(message)
+
+    private class AuthSessionException(message: String) : Exception(message)
 
     private companion object {
         const val SYNC_FRESHNESS_MILLIS = 2 * 60 * 1000L

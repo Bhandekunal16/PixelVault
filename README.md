@@ -26,13 +26,13 @@ The application interfaces directly with the following backend routes:
 |---|---|---|---|
 | `GET` | `/` | Server availability & ping health check | None |
 | `POST` | `/register` | User registration (Gmail only, 8+ char password) | `{"email": "person@gmail.com", "password": "..."}` |
-| `POST` | `/login` | User authentication | `{"email": "person@gmail.com", "password": "..."}` |
-| `POST` | `/image` | Upload & format conversion (max 10 MiB) | `multipart/form-data` (`image`, `email`, `format`) |
-| `GET` | `/image?email={email}` | Retrieve image metadata list for user | Query param: `email=person%40gmail.com` |
-| `GET` | `/image?id={id}` | Retrieve raw binary image data | Query param: `id=...` (Streams binary image) |
-| `DELETE` | `/image` | Delete 1 to 100 images by ID | `{"ids": ["mongo-id-1", "mongo-id-2"]}` |
+| `POST` | `/login` | User authentication; returns an access token | `{"email": "person@gmail.com", "password": "..."}` |
+| `POST` | `/image` | Authenticated upload & format conversion (max 10 MiB) | `multipart/form-data` (`image`, optional matching `email`, `format`) |
+| `GET` | `/image` | Retrieve metadata list for the authenticated user | Bearer token |
+| `GET` | `/image?id={id}` | Retrieve an owned image's raw bytes | Bearer token; streams binary image |
+| `DELETE` | `/image` | Delete 1 to 100 owned images by ID | Bearer token and `{"ids": ["mongo-id-1", "mongo-id-2"]}` |
 
-The backend's email-based metadata lookup omits image bytes, while image downloads return only the selected image and its response metadata. The backend also has an internal per-email storage-usage summary, but it is not exposed as an API endpoint and is not available to the app.
+Image API calls use the `Authorization: Bearer <accessToken>` header. Login returns `data.user`, `data.accessToken`, and `data.expiresAt` (Unix seconds). Metadata responses omit image bytes. The backend's internal storage-usage summary is not exposed as an API endpoint.
 
 ## 3. Local-First Image Behavior
 
@@ -40,7 +40,8 @@ The backend's email-based metadata lookup omits image bytes, while image downloa
 - A successful list sync replaces the cached records for that normalized email account in one transaction. Other account caches are kept separate. Automatic list sync is considered fresh for two minutes; an explicit refresh bypasses that window.
 - Uploads and deletions remain online-only. Confirmed uploads are written to Room; successful or already-absent deletions remove the corresponding local records. The app does not queue mutations for later or automatically retry an upload with an uncertain network outcome.
 - The backend currently has no image-update endpoint. Its existing per-email usage aggregation is internal only; the app does not show fabricated usage or enforce a quota.
-- Local email scoping separates cached records in the app, but it is not authorization. The current backend does not authenticate these requests or verify ownership on image deletion.
+- Room records are partitioned by normalized account email and scoped repository calls require the matching active session. The backend separately validates bearer tokens and scopes image access/deletion by stable user ID, with an email fallback only for legacy records without an owner ID.
+- Metadata is persisted in Room; image bytes are fetched from the authenticated backend when needed. Coil provides its configured image memory/disk cache. Uploads and deletions are online-only; there is no durable mutation queue.
 
 ---
 
@@ -71,21 +72,17 @@ The backend's email-based metadata lookup omits image bytes, while image downloa
 
 The application includes an in-app **Server Configuration** editor in the **Settings** tab with instant connection testing (`GET /` ping with latency readout):
 
-### Default Backend Server
+### Hosted API (default)
 - **URL:** `http://147.224.251.137:8001/`
-- **Default:** Pre-configured as the app's default backend endpoint.
+- **Warning:** This hosted endpoint currently supports HTTP only. Login passwords, image data, and bearer tokens are not encrypted in transit and may be intercepted. Use a trusted HTTPS endpoint for sensitive or production use.
 
 ### Standard Android Emulator
 - **URL:** `http://10.0.2.2:8000/`
 - **Explanation:** In the Android emulator, `localhost` points to the emulator itself. `10.0.2.2` is the special alias provided by the Android emulator routing table to access the host machine's `127.0.0.1`.
 
 ### Physical Android Device
-- Ensure your physical phone and host computer are on the same Wi-Fi network.
-- Determine your computer's local LAN IP:
-  - macOS/Linux: `ifconfig` or `ip a` (e.g., `192.168.1.50`)
-  - Windows: `ipconfig`
-- Set the Base URL in the app's Settings to:
-  `http://192.168.1.50:8000/`
+- The hosted API URL above is available from physical devices with internet access.
+- The Android app permits HTTP only for localhost, emulator loopback, and the exact hosted IP/port above. All other non-local API hosts require HTTPS.
 
 ### Staging or Production Server
 - Use the secure HTTPS domain, e.g.:
@@ -136,21 +133,12 @@ The APK will be generated at:
 
 ---
 
-## 9. Backend Security Limitations & Production Hardening
+## 9. Authentication, storage, and deployment notes
 
-Before deploying this system to production, the following security limitations of the current Node.js Express backend must be addressed:
-
-1. **Absence of Token / Session Authentication:**
-   - *Current Limitation:* The API does not issue JWT access tokens, refresh tokens, or HTTP-only session cookies upon `POST /login`. Currently, the Android app saves login state locally as a convenience.
-   - *Production Fix:* Implement JWT (Bearer tokens) or secure session cookies in `POST /login` and validate them on every endpoint using an authentication middleware.
-
-2. **Unauthenticated Image Deletion:**
-   - *Current Limitation:* `DELETE /image` accepts arbitrary MongoDB Object IDs in the request body without checking if the requesting user owns those images.
-   - *Production Fix:* Enforce server-side ownership authorization: `Image.deleteMany({ _id: { $in: ids }, ownerEmail: req.user.email })`.
-
-3. **Email-based Query Exposure:**
-   - *Current Limitation:* `GET /image?email=person@gmail.com` allows anyone who knows an email address to query their image metadata.
-   - *Production Fix:* Derive user identity directly from the authenticated session/JWT rather than trusting unverified query parameters.
-
-4. **HTTPS Transport Layer:**
-   - Always serve the Express backend behind HTTPS with TLS 1.3 in production environments. Cleartext traffic (`usesCleartextTraffic="true"`) is enabled in `AndroidManifest.xml` strictly for local development against `http://10.0.2.2:8000/` and localhost.
+- The backend requires `AUTH_TOKEN_SECRET` (at least 32 UTF-8 bytes) from its process environment or deployment secret manager. Set `AUTH_TOKEN_TTL_SECONDS` in the backend's `json/app.json` (default 12 hours; accepted range 300 seconds to 7 days). Do not commit the signing secret. See the backend [API reference](../api.md).
+- The app encrypts the access token with AES-GCM using an Android Keystore key before persisting it in DataStore. Session-bearing DataStore files are excluded from Android backup.
+- Tokens are stateless and cannot be revoked server-side before expiry. Clearing the app session removes the local token but does not invalidate a previously copied token.
+- Deploy the backend behind a trusted HTTPS terminator and do not expose backend ports directly to the public internet. The Android client allows cleartext only for localhost, loopback, and the standard emulator host for development.
+- Legacy image records without `ownerId` are served only when their stored email matches the authenticated account. Newly uploaded records use the stable user ID from the token.
+- Account-scoped Room metadata remains on device after logout; logout clears credentials, not cached image metadata. Shared-device threat models may require explicit cache deletion on logout.
+- Image update APIs, server-side logout/revocation, refresh tokens, offline mutation queues, and public quota/usage endpoints are not implemented.

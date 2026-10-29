@@ -67,7 +67,6 @@ import com.example.util.rememberHapticHelper
 @Composable
 fun ImageDetailScreen(
     metadata: ImageMetadata,
-    baseUrl: String,
     viewModel: DetailViewModel,
     onNavigateBack: () -> Unit,
     onImageDeleted: () -> Unit
@@ -77,9 +76,6 @@ fun ImageDetailScreen(
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     var showDeleteConfirm by remember { mutableStateOf(false) }
-
-    val normalizedUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
-    val imageBytesUrl = "${normalizedUrl}image?id=${metadata.effectiveId}"
 
     LaunchedEffect(metadata.effectiveId) {
         viewModel.setMetadata(metadata)
@@ -191,10 +187,9 @@ fun ImageDetailScreen(
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
-                    val imageSource: Any? = uiState.imageBytes ?: imageBytesUrl
                     AsyncImage(
                         model = ImageRequest.Builder(context)
-                            .data(imageSource)
+                            .data(uiState.imageBytes)
                             .crossfade(true)
                             .build(),
                         contentDescription = metadata.effectiveFilename,

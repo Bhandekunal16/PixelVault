@@ -8,6 +8,7 @@ import com.example.data.model.User
 import com.example.data.preferences.AppPreferences
 import com.example.util.Resource
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -43,6 +44,7 @@ class AuthRepositoryImpl(
                 emit(Resource.Error(NetworkErrorHandler.parseError(response)))
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Resource.Error(NetworkErrorHandler.parseException(e), e))
         }
     }.flowOn(Dispatchers.IO)
@@ -63,19 +65,25 @@ class AuthRepositoryImpl(
             val response = api.login(LoginRequest(email = email.trim(), password = password))
 
             if (response.isSuccessful) {
-                val body = response.body()
-                val user = body?.data?.user ?: User(email = email.trim(), role = "user")
-                // Persist locally for app navigation convenience
+                val loginData = response.body()?.data
+                val user = loginData?.user
+                val accessToken = loginData?.accessToken
+                if (user == null || user.effectiveId.isBlank() || accessToken.isNullOrBlank()) {
+                    emit(Resource.Error("The server login response did not contain a valid user session."))
+                    return@flow
+                }
                 preferences.saveUserSession(
                     email = user.email,
                     id = user.effectiveId,
-                    role = user.role
+                    role = user.role,
+                    accessToken = accessToken
                 )
                 emit(Resource.Success(user))
             } else {
                 emit(Resource.Error(NetworkErrorHandler.parseError(response)))
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Resource.Error(NetworkErrorHandler.parseException(e), e))
         }
     }.flowOn(Dispatchers.IO)

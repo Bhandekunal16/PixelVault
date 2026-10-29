@@ -13,6 +13,7 @@ import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.HTTP
 import retrofit2.http.Multipart
 import retrofit2.http.POST
@@ -40,7 +41,7 @@ interface ApiService {
     /**
      * Authenticate user.
      * On success returns user object in data.user.
-     * Note: Does not return tokens or cookies.
+     * Returns a short-lived bearer access token after successful authentication.
      */
     @POST("/login")
     suspend fun login(
@@ -54,26 +55,18 @@ interface ApiService {
     @Multipart
     @POST("/image")
     suspend fun uploadImage(
+        @Header("Authorization") authorization: String,
         @Part image: MultipartBody.Part,
-        @Part("email") email: RequestBody,
         @Part("format") format: RequestBody
     ): Response<ApiResponse<ImageMetadata>>
 
     /**
-     * Retrieve image metadata associated with the user's email.
+     * Retrieve image metadata associated with the authenticated account.
      */
     @GET("/image")
-    suspend fun getImagesByEmail(
-        @Query("email") email: String
+    suspend fun getImages(
+        @Header("Authorization") authorization: String
     ): Response<ApiResponse<List<ImageMetadata>>>
-
-    /**
-     * Raw endpoint for image metadata query in case backend returns direct list or custom JSON.
-     */
-    @GET("/image")
-    suspend fun getImagesByEmailRaw(
-        @Query("email") email: String
-    ): Response<ResponseBody>
 
     /**
      * Retrieve original stored image bytes as binary data.
@@ -81,6 +74,7 @@ interface ApiService {
     @Streaming
     @GET("/image")
     suspend fun getImageBytes(
+        @Header("Authorization") authorization: String,
         @Query("id") id: String
     ): Response<ResponseBody>
 
@@ -93,6 +87,7 @@ interface ApiService {
      */
     @HTTP(method = "DELETE", path = "/image", hasBody = true)
     suspend fun deleteImages(
+        @Header("Authorization") authorization: String,
         @Body request: DeleteImagesRequest
     ): Response<ApiResponse<Int>>
 }

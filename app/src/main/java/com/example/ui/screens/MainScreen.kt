@@ -77,7 +77,6 @@ fun MainScreen(
         val selectedImage = selectedImageForDetail!!
         ImageDetailScreen(
             metadata = selectedImage,
-            baseUrl = baseUrl,
             viewModel = detailViewModel,
             onNavigateBack = {
                 selectedImageForDetail = null

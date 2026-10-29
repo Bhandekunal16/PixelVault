@@ -9,11 +9,17 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "image_vault_prefs")
 
-class AppPreferences(private val context: Context) {
+class AppPreferences internal constructor(
+    private val context: Context,
+    private val accessTokenCipher: TokenCipher
+) {
+    constructor(context: Context) : this(context, AccessTokenCipher())
+
 
     companion object {
         private val KEY_BASE_URL = stringPreferencesKey("base_url")
@@ -21,6 +27,7 @@ class AppPreferences(private val context: Context) {
         private val KEY_USER_ID = stringPreferencesKey("user_id")
         private val KEY_USER_ROLE = stringPreferencesKey("user_role")
         private val KEY_IS_LOGGED_IN = booleanPreferencesKey("is_logged_in")
+        private val KEY_ACCESS_TOKEN = stringPreferencesKey("access_token")
         private val KEY_ENCRYPTION_ENABLED = booleanPreferencesKey("encryption_enabled")
         private val KEY_ENCRYPTION_SECRET = stringPreferencesKey("encryption_secret")
         private val KEY_ENCRYPTION_ALGO = stringPreferencesKey("encryption_algo")
@@ -30,13 +37,16 @@ class AppPreferences(private val context: Context) {
         private val KEY_DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
 
         // Default configured backend server path
-        const val DEFAULT_BASE_URL = "http://147.224.251.137:8001/"
         const val EMULATOR_BASE_URL = "http://10.0.2.2:8000/"
+        const val HOSTED_BASE_URL = "http://147.224.251.137:8001/"
+        const val DEFAULT_BASE_URL = HOSTED_BASE_URL
         const val LOCALHOST_BASE_URL = "http://localhost:8000/"
     }
 
     val baseUrlFlow: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_BASE_URL] ?: DEFAULT_BASE_URL
+        prefs[KEY_BASE_URL]
+            ?.takeUnless { it == EMULATOR_BASE_URL }
+            ?: DEFAULT_BASE_URL
     }
 
     val userEmailFlow: Flow<String?> = context.dataStore.data.map { prefs ->
@@ -51,12 +61,15 @@ class AppPreferences(private val context: Context) {
         prefs[KEY_USER_ROLE] ?: "user"
     }
 
-    /**
-     * Note: As documented, the Express backend does not currently issue JWT tokens or session cookies.
-     * This local login state is maintained solely as a client-side convenience.
-     */
-    val isLoggedInFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_IS_LOGGED_IN] ?: false
+    val accessTokenFlow: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[KEY_ACCESS_TOKEN]?.let(accessTokenCipher::decrypt)
+    }
+
+    val isLoggedInFlow: Flow<Boolean> = combine(
+        context.dataStore.data.map { prefs -> prefs[KEY_IS_LOGGED_IN] ?: false },
+        accessTokenFlow
+    ) { isLoggedIn, accessToken ->
+        isLoggedIn && !accessToken.isNullOrBlank()
     }
 
     val encryptionEnabledFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
@@ -78,22 +91,36 @@ class AppPreferences(private val context: Context) {
         }
     }
 
-    suspend fun saveUserSession(email: String, id: String?, role: String?) {
+    suspend fun saveUserSession(email: String, id: String?, role: String?, accessToken: String) {
+        require(accessToken.isNotBlank()) { "A server access token is required to save a session" }
         context.dataStore.edit { prefs ->
             prefs[KEY_USER_EMAIL] = email
             if (id != null) prefs[KEY_USER_ID] = id
             if (role != null) prefs[KEY_USER_ROLE] = role
+            prefs[KEY_ACCESS_TOKEN] = accessTokenCipher.encrypt(accessToken)
             prefs[KEY_IS_LOGGED_IN] = true
         }
     }
 
     suspend fun clearSession() {
         context.dataStore.edit { prefs ->
-            prefs.remove(KEY_USER_EMAIL)
-            prefs.remove(KEY_USER_ID)
-            prefs.remove(KEY_USER_ROLE)
-            prefs[KEY_IS_LOGGED_IN] = false
+            clearSession(prefs)
         }
+    }
+
+    suspend fun clearSessionIfAccessToken(expectedAccessToken: String) {
+        context.dataStore.edit { prefs ->
+            val storedToken = prefs[KEY_ACCESS_TOKEN]?.let(accessTokenCipher::decrypt)
+            if (storedToken == expectedAccessToken) clearSession(prefs)
+        }
+    }
+
+    private fun clearSession(prefs: androidx.datastore.preferences.core.MutablePreferences) {
+        prefs.remove(KEY_USER_EMAIL)
+        prefs.remove(KEY_USER_ID)
+        prefs.remove(KEY_USER_ROLE)
+        prefs.remove(KEY_ACCESS_TOKEN)
+        prefs[KEY_IS_LOGGED_IN] = false
     }
 
     suspend fun setEncryptionConfig(enabled: Boolean, secret: String?, algo: String?) {

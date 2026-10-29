@@ -29,7 +29,9 @@ class ModelParsingTest {
                         "id": "64f1a2b3c4d5e6f7a8b9c0d1",
                         "email": "person@gmail.com",
                         "role": "admin"
-                    }
+                    },
+                    "accessToken": "signed-access-token",
+                    "expiresAt": 1793275200
                 }
             }
         """.trimIndent()
@@ -46,6 +48,8 @@ class ModelParsingTest {
         assertEquals("64f1a2b3c4d5e6f7a8b9c0d1", user?.effectiveId)
         assertEquals("person@gmail.com", user?.email)
         assertEquals("admin", user?.role)
+        assertEquals("signed-access-token", response?.data?.accessToken)
+        assertEquals(1793275200L, response?.data?.expiresAt)
     }
 
     @Test

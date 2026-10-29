@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 data class DetailUiState(
     val metadata: ImageMetadata? = null,
@@ -33,11 +34,18 @@ class DetailViewModel(
     private val _uiState = MutableStateFlow(DetailUiState())
     val uiState: StateFlow<DetailUiState> = _uiState.asStateFlow()
     private var activeImageId = ""
+    private var activeAccount = ""
     private var imageRequestJob: Job? = null
 
     fun setMetadata(metadata: ImageMetadata) {
         val id = metadata.effectiveId
-        val changedImage = id != activeImageId
+        val account = normalizeAccount(metadata.email.orEmpty())
+        val changedImage = id != activeImageId || account != activeAccount
+        if (changedImage) {
+            activeImageId = id
+            activeAccount = account
+            imageRequestJob?.cancel()
+        }
         _uiState.update {
             it.copy(
                 metadata = metadata,
@@ -57,7 +65,9 @@ class DetailViewModel(
         if (!forceRefresh && activeImageId == id && _uiState.value.imageBytes != null) return
 
         val changedImage = activeImageId != id
+        if (changedImage) activeAccount = normalizeAccount(_uiState.value.metadata?.email.orEmpty())
         activeImageId = id
+        val account = activeAccount
         imageRequestJob?.cancel()
         _uiState.update {
             it.copy(
@@ -67,8 +77,8 @@ class DetailViewModel(
             )
         }
         imageRequestJob = viewModelScope.launch {
-            imageRepository.getImageBytes(id).collect { resource ->
-                if (activeImageId != id) return@collect
+            imageRepository.getImageBytes(id, account).collect { resource ->
+                if (activeImageId != id || activeAccount != account) return@collect
                 when (resource) {
                     is Resource.Loading -> _uiState.update { it.copy(isLoadingBytes = true, errorMessage = null) }
                     is Resource.Success -> {
@@ -128,12 +138,15 @@ class DetailViewModel(
 
     fun deleteImage(onDeleted: () -> Unit) {
         if (_uiState.value.isDeleting) return
-        val id = _uiState.value.metadata?.effectiveId ?: return
+        val metadata = _uiState.value.metadata ?: return
+        val id = metadata.effectiveId
+        val account = normalizeAccount(metadata.email.orEmpty())
         _uiState.update { it.copy(isDeleting = true, errorMessage = null, infoMessage = null) }
 
         viewModelScope.launch {
             var deleteError: String? = null
-            imageRepository.deleteImages(listOf(id)).collect { resource ->
+            imageRepository.deleteImages(listOf(id), account).collect { resource ->
+                if (activeImageId != id || activeAccount != account) return@collect
                 when (resource) {
                     is Resource.Loading -> Unit
                     is Resource.Success -> Unit
@@ -145,7 +158,8 @@ class DetailViewModel(
             var imageNotFound = false
             var verificationError: String? = null
 
-            imageRepository.getImageBytes(id).collect { resource ->
+            imageRepository.getImageBytes(id, account).collect { resource ->
+                if (activeImageId != id || activeAccount != account) return@collect
                 when (resource) {
                     is Resource.Loading -> Unit
                     is Resource.Success -> imageStillExists = true
@@ -157,6 +171,7 @@ class DetailViewModel(
                 }
             }
 
+            if (activeImageId != id || activeAccount != account) return@launch
             when {
                 imageNotFound -> {
                     _uiState.update {
@@ -205,4 +220,6 @@ class DetailViewModel(
     fun clearInfoMessage() {
         _uiState.update { it.copy(infoMessage = null) }
     }
+
+    private fun normalizeAccount(email: String): String = email.trim().lowercase(Locale.ROOT)
 }

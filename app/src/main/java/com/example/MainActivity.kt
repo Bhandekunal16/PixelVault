@@ -8,6 +8,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModelProvider
@@ -40,7 +43,6 @@ import com.example.ui.viewmodel.SettingsViewModel
 import com.example.ui.viewmodel.UploadViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 
 class MainActivity : FragmentActivity() {
 
@@ -57,7 +59,9 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
 
-        preferences = AppPreferences(applicationContext)
+        val pixelVaultApplication = application as PixelVaultApplication
+        preferences = pixelVaultApplication.preferences
+        networkClient = pixelVaultApplication.networkClient
         biometricAuthManager = BiometricAuthManager(applicationContext)
         appLockManager = AppLockManager()
 
@@ -69,19 +73,6 @@ class MainActivity : FragmentActivity() {
                 appLockManager.lockNow()
             }
         }
-
-        // Wire dynamic encryption settings to OkHttp interceptor
-        networkClient = NetworkClient(
-            isEncryptionEnabled = {
-                runBlocking { preferences.encryptionEnabledFlow.first() }
-            },
-            getSecretKey = {
-                runBlocking { preferences.encryptionSecretFlow.first() }
-            },
-            getAlgorithm = {
-                runBlocking { preferences.encryptionAlgoFlow.first() }
-            }
-        )
 
         authRepository = AuthRepositoryImpl(preferences, networkClient)
         val imageDatabase = ImageDatabase.getInstance(applicationContext)
@@ -123,6 +114,20 @@ class MainActivity : FragmentActivity() {
                     val isLocked by appLockManager.isLocked.collectAsStateWithLifecycle()
                     val appLockEnabled by preferences.appLockEnabledFlow.collectAsStateWithLifecycle(initialValue = false)
                     val isLoggedIn by preferences.isLoggedInFlow.collectAsStateWithLifecycle(initialValue = false)
+                    var wasLoggedIn by remember { mutableStateOf(false) }
+
+                    LaunchedEffect(isLoggedIn) {
+                        if (
+                            wasLoggedIn &&
+                            !isLoggedIn &&
+                            navController.currentDestination?.route != Screen.Login.route
+                        ) {
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        }
+                        wasLoggedIn = isLoggedIn
+                    }
 
                     // Window security flag handling
                     LaunchedEffect(isLocked, appLockEnabled) {
