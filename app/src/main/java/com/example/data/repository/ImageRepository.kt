@@ -188,10 +188,15 @@ class ImageRepositoryImpl(
                 if (bytes != null && bytes.isNotEmpty()) {
                     emit(Resource.Success(bytes))
                 } else {
-                    emit(Resource.Error("Empty image stream received from server."))
+                    emit(Resource.Error("Empty image stream received from server.", statusCode = response.code()))
                 }
             } else {
-                emit(Resource.Error(NetworkErrorHandler.parseError(response)))
+                emit(
+                    Resource.Error(
+                        NetworkErrorHandler.parseError(response),
+                        statusCode = response.code()
+                    )
+                )
             }
         } catch (e: Exception) {
             emit(Resource.Error(NetworkErrorHandler.parseException(e), e))

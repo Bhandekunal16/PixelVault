@@ -69,7 +69,8 @@ fun ImageDetailScreen(
     metadata: ImageMetadata,
     baseUrl: String,
     viewModel: DetailViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onImageDeleted: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val haptic = rememberHapticHelper()
@@ -91,9 +92,7 @@ fun ImageDetailScreen(
             confirmLabel = "Delete",
             onConfirm = {
                 showDeleteConfirm = false
-                viewModel.deleteImage {
-                    onNavigateBack()
-                }
+                viewModel.deleteImage(onImageDeleted)
             },
             onDismiss = { showDeleteConfirm = false }
         )
@@ -144,6 +143,7 @@ fun ImageDetailScreen(
                             haptic.click()
                             showDeleteConfirm = true
                         },
+                        enabled = !uiState.isDeleting,
                         modifier = Modifier.testTag("detail_delete_button")
                     ) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
@@ -245,6 +245,7 @@ fun ImageDetailScreen(
                         )
                         DeleteActionButton(
                             onClick = onDelete,
+                            isDeleting = uiState.isDeleting,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -261,6 +262,7 @@ fun ImageDetailScreen(
                         )
                         DeleteActionButton(
                             onClick = onDelete,
+                            isDeleting = uiState.isDeleting,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -369,10 +371,12 @@ private fun DownloadActionButton(
 @Composable
 private fun DeleteActionButton(
     onClick: () -> Unit,
+    isDeleting: Boolean,
     modifier: Modifier = Modifier
 ) {
     OutlinedButton(
         onClick = onClick,
+        enabled = !isDeleting,
         modifier = modifier
             .height(52.dp)
             .testTag("detail_delete_action_button"),
@@ -381,9 +385,18 @@ private fun DeleteActionButton(
         shape = RoundedCornerShape(14.dp),
         contentPadding = PaddingValues(horizontal = 16.dp)
     ) {
-        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-        Spacer(modifier = Modifier.width(8.dp))
-        Text("Delete Image", maxLines = 1, style = MaterialTheme.typography.labelLarge)
+        if (isDeleting) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Deleting...", maxLines = 1, style = MaterialTheme.typography.labelLarge)
+        } else {
+            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Delete Image", maxLines = 1, style = MaterialTheme.typography.labelLarge)
+        }
     }
 }
 

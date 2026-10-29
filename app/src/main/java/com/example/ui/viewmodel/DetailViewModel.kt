@@ -97,28 +97,75 @@ class DetailViewModel(
     }
 
     fun deleteImage(onDeleted: () -> Unit) {
+        if (_uiState.value.isDeleting) return
         val id = _uiState.value.metadata?.effectiveId ?: return
+        _uiState.update { it.copy(isDeleting = true, errorMessage = null, infoMessage = null) }
+
         viewModelScope.launch {
+            var deleteError: String? = null
             imageRepository.deleteImages(listOf(id)).collect { resource ->
                 when (resource) {
-                    is Resource.Loading -> _uiState.update { it.copy(isDeleting = true, errorMessage = null) }
-                    is Resource.Success -> {
-                        _uiState.update {
-                            it.copy(
-                                isDeleting = false,
-                                isDeleted = true,
-                                infoMessage = "Image deleted successfully."
-                            )
-                        }
-                        onDeleted()
+                    is Resource.Loading -> Unit
+                    is Resource.Success -> Unit
+                    is Resource.Error -> deleteError = resource.message
+                }
+            }
+
+            var imageStillExists = false
+            var imageNotFound = false
+            var verificationError: String? = null
+
+            imageRepository.getImageBytes(id).collect { resource ->
+                when (resource) {
+                    is Resource.Loading -> Unit
+                    is Resource.Success -> imageStillExists = true
+                    is Resource.Error -> when {
+                        resource.statusCode == 404 -> imageNotFound = true
+                        resource.statusCode in 200..299 -> imageStillExists = true
+                        else -> verificationError = resource.message
                     }
-                    is Resource.Error -> {
-                        _uiState.update {
-                            it.copy(
-                                isDeleting = false,
-                                errorMessage = resource.message
-                            )
-                        }
+                }
+            }
+
+            when {
+                imageNotFound -> {
+                    _uiState.update {
+                        it.copy(
+                            isDeleting = false,
+                            isDeleted = true,
+                            infoMessage = "Image deleted successfully."
+                        )
+                    }
+                    onDeleted()
+                }
+                verificationError != null -> {
+                    _uiState.update {
+                        it.copy(
+                            isDeleting = false,
+                            errorMessage = if (deleteError == null) {
+                                "Could not verify whether the image was deleted: $verificationError"
+                            } else {
+                                "Delete failed: $deleteError Verification also failed: $verificationError"
+                            }
+                        )
+                    }
+                }
+                imageStillExists -> {
+                    _uiState.update {
+                        it.copy(
+                            isDeleting = false,
+                            errorMessage = deleteError
+                                ?: "The image is still available. The deletion could not be confirmed."
+                        )
+                    }
+                }
+                else -> {
+                    _uiState.update {
+                        it.copy(
+                            isDeleting = false,
+                            errorMessage = deleteError
+                                ?: "The server did not confirm whether the image was deleted."
+                        )
                     }
                 }
             }

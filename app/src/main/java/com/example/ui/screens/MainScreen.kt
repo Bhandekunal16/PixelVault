@@ -83,6 +83,18 @@ fun MainScreen(
                 // Refresh list when returning from detail
                 imagesViewModel.loadImages(isRefresh = true)
                 dashboardViewModel.loadDashboardData()
+            },
+            onImageDeleted = {
+                selectedImageForDetail = null
+                currentTab = BottomNavTab.Images.route
+                imagesViewModel.loadImages(isRefresh = true)
+                dashboardViewModel.loadDashboardData()
+                coroutineScope.launch {
+                    snackbarHostState.showSnackbar(
+                        message = "Image deleted successfully",
+                        duration = SnackbarDuration.Short
+                    )
+                }
             }
         )
         return
