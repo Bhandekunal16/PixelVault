@@ -57,6 +57,7 @@ interface ApiService {
     @POST("/image")
     suspend fun uploadImage(
         @Header("Authorization") authorization: String,
+        @Header("Idempotency-Key") idempotencyKey: String? = null,
         @Part image: MultipartBody.Part,
         @Part("format") format: RequestBody
     ): Response<ApiResponse<ImageMetadata>>

@@ -12,6 +12,7 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.text.DecimalFormat
 import kotlin.math.log10
 import kotlin.math.pow
@@ -21,7 +22,7 @@ object FileUtils {
     const val MAX_IMAGE_BYTES: Long = 10L * 1024L * 1024L // 10 MiB limit
 
     fun getFileName(context: Context, uri: Uri): String {
-        var name = "image_${System.currentTimeMillis()}"
+        var name: String? = null
         val cursor = context.contentResolver.query(uri, null, null, null, null)
         cursor?.use {
             if (it.moveToFirst()) {
@@ -31,21 +32,29 @@ object FileUtils {
                 }
             }
         }
-        return name
+        return name?.takeIf(String::isNotBlank)
+            ?: uri.lastPathSegment
+                ?.substringAfterLast('/')
+                ?.takeIf(String::isNotBlank)
+            ?: "image_${System.currentTimeMillis()}"
     }
 
     fun getFileSize(context: Context, uri: Uri): Long {
-        var size: Long = 0
+        var size: Long? = null
         val cursor = context.contentResolver.query(uri, null, null, null, null)
         cursor?.use {
             if (it.moveToFirst()) {
                 val index = it.getColumnIndex(OpenableColumns.SIZE)
                 if (index != -1) {
-                    size = it.getLong(index)
+                    size = it.getLong(index).takeIf { value -> value >= 0L }
                 }
             }
         }
-        return size
+        return size ?: if (uri.scheme == "file") {
+            uri.path?.let(::File)?.takeIf(File::isFile)?.length() ?: 0L
+        } else {
+            0L
+        }
     }
 
     fun uriToMultipartPart(
@@ -65,6 +74,30 @@ object FileUtils {
         } catch (e: Exception) {
             null
         }
+    }
+
+    fun fileToMultipartPart(file: File, filename: String, mimeType: String): MultipartBody.Part {
+        if (!file.isFile || !file.canRead()) {
+            throw IOException("The queued image is missing or cannot be read. Choose it again.")
+        }
+        val size = file.length()
+        if (size <= 0L) throw IOException("The queued image is empty.")
+        if (size > MAX_IMAGE_BYTES) {
+            throw IllegalArgumentException("Selected image exceeds the 10 MiB upload limit.")
+        }
+        if (!mimeType.startsWith("image/", ignoreCase = true)) {
+            throw IllegalArgumentException("The queued file is not a supported image.")
+        }
+
+        val bytes = file.inputStream().use { it.readBytes() }
+        if (bytes.size.toLong() != size) {
+            throw IOException("The queued image changed while it was being read.")
+        }
+        return MultipartBody.Part.createFormData(
+            "image",
+            filename,
+            bytes.toRequestBody(mimeType.toMediaTypeOrNull())
+        )
     }
 
     fun formatBytes(bytes: Long?): String {

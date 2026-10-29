@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Person
@@ -70,6 +71,7 @@ import com.example.util.rememberHapticHelper
 fun HomeScreen(
     viewModel: DashboardViewModel,
     baseUrl: String,
+    pendingUploadCount: Int = 0,
     onNavigateToUpload: () -> Unit,
     onNavigateToImages: () -> Unit,
     onImageSelected: (ImageMetadata) -> Unit,
@@ -157,6 +159,41 @@ fun HomeScreen(
             errorMessage = uiState.storageUsageErrorMessage,
             onRefresh = viewModel::refreshStorageUsageIfStale
         )
+
+        if (pendingUploadCount > 0) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(onClick = onNavigateToUpload)
+                    .testTag("dashboard_pending_uploads"),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.CloudUpload,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "$pendingUploadCount image${if (pendingUploadCount == 1) "" else "s"} waiting to upload",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = onNavigateToUpload) {
+                        Text("View")
+                    }
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 

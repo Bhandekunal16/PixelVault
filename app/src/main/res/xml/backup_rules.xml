@@ -7,4 +7,5 @@
 -->
 <full-backup-content>
     <exclude domain="file" path="datastore/" />
+    <exclude domain="file" path="pending_uploads/" />
 </full-backup-content>

@@ -26,9 +26,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -47,6 +49,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,6 +66,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.data.model.OutputFormat
+import com.example.data.local.QueuedUploadEntity
+import com.example.data.local.UploadQueueStatus
 import com.example.ui.components.StatusBanner
 import com.example.ui.components.StorageUsageCard
 import com.example.ui.theme.SuccessGreen
@@ -70,6 +77,9 @@ import com.example.util.EmailUtils
 import com.example.util.rememberHapticHelper
 import com.example.ui.viewmodel.UploadViewModel
 import com.example.util.FileUtils
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.collectLatest
 
 @Composable
 fun UploadScreen(
@@ -87,6 +97,15 @@ fun UploadScreen(
     LaunchedEffect(uiState.email) {
         viewModel.refreshStorageUsageIfStale()
     }
+
+    LaunchedEffect(viewModel) {
+        viewModel.uploadCompletedEvents.collect {
+            haptic.success()
+            onUploadSuccess()
+        }
+    }
+
+    TransientQueueNotice(viewModel.queueNoticeEvents)
 
     // Android zero-permission Photo Picker
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -130,6 +149,27 @@ fun UploadScreen(
             errorMessage = uiState.storageUsageErrorMessage,
             onRefresh = viewModel::refreshStorageUsageIfStale
         )
+
+        if (uiState.queuedUploads.isNotEmpty()) {
+            Text(
+                text = "Upload queue (${uiState.pendingUploadCount} pending)",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            uiState.queuedUploads.forEach { upload ->
+                QueuedUploadCard(
+                    upload = upload,
+                    isActionRunning = upload.operationId in uiState.queueActionIds,
+                    onRetry = { viewModel.retryQueuedUpload(upload.operationId) },
+                    onCancel = { viewModel.cancelQueuedUpload(upload.operationId) },
+                    onRemove = { viewModel.removeQueuedUpload(upload.operationId) },
+                    onManageStorage = onNavigateToImages
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
 
         if (uiState.errorCode == "STORAGE_QUOTA_EXCEEDED") {
             OutlinedButton(
@@ -218,7 +258,7 @@ fun UploadScreen(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable {
+                .clickable(enabled = !uiState.isQueueing) {
                     haptic.click()
                     photoPickerLauncher.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -277,6 +317,7 @@ fun UploadScreen(
                                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                 )
                             },
+                            enabled = !uiState.isQueueing,
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                             modifier = Modifier.testTag("change_image_button")
@@ -451,16 +492,16 @@ fun UploadScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Upload Button
+        // The queue action persists the selected bytes locally before scheduling network work.
         Button(
             onClick = {
                 haptic.click()
-                viewModel.upload(context) {
-                    haptic.success()
-                    onUploadSuccess()
-                }
+                viewModel.queueSelectedImage(context)
             },
-            enabled = uiState.selectedUri != null && !uiState.isUploading && uiState.email.isNotBlank(),
+            enabled = uiState.selectedUri != null &&
+                !uiState.isUploading &&
+                !uiState.isQueueing &&
+                uiState.email.isNotBlank(),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp)
@@ -471,23 +512,183 @@ fun UploadScreen(
                 disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
             )
         ) {
-            if (uiState.isUploading) {
+            if (uiState.isQueueing) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(24.dp),
                     strokeWidth = 2.5.dp,
                     color = MaterialTheme.colorScheme.onPrimary
                 )
                 Spacer(modifier = Modifier.width(10.dp))
-                Text("Uploading & Optimizing...", color = MaterialTheme.colorScheme.onPrimary)
+                Text("Saving image on this device...", color = MaterialTheme.colorScheme.onPrimary)
             } else {
                 Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onPrimary)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Upload & Optimize", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onPrimary)
+                Text("Add to Upload Queue", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onPrimary)
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
     }
+}
+
+@Composable
+internal fun TransientQueueNotice(events: SharedFlow<String?>) {
+    var message by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(events) {
+        events.collectLatest { nextMessage ->
+            if (nextMessage == null) {
+                message = null
+            } else {
+                message = nextMessage
+                delay(4_000)
+                message = null
+            }
+        }
+    }
+
+    if (message != null) {
+        StatusBanner(message = message!!, isSuccess = true)
+        Spacer(modifier = Modifier.height(12.dp))
+    }
+}
+
+@Composable
+private fun QueuedUploadCard(
+    upload: QueuedUploadEntity,
+    isActionRunning: Boolean,
+    onRetry: () -> Unit,
+    onCancel: () -> Unit,
+    onRemove: () -> Unit,
+    onManageStorage: () -> Unit
+) {
+    val isFailed = upload.status == UploadQueueStatus.PERMANENT_FAILURE ||
+        upload.status == UploadQueueStatus.RETRYABLE_FAILURE
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = if (upload.status == UploadQueueStatus.UPLOADING) {
+                        Icons.Default.CloudUpload
+                    } else {
+                        Icons.Default.Schedule
+                    },
+                    contentDescription = null,
+                    tint = if (isFailed) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = upload.originalFilename,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1
+                    )
+                    Text(
+                        text = "${FileUtils.formatBytes(upload.fileSizeBytes)} · ${upload.status.toUploadStatusLabel()}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isFailed) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (upload.status == UploadQueueStatus.UPLOADING) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp
+                    )
+                }
+            }
+            if (!upload.lastErrorMessage.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = upload.lastErrorMessage,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            val canRetry = upload.status == UploadQueueStatus.RETRYABLE_FAILURE ||
+                upload.status == UploadQueueStatus.PERMANENT_FAILURE ||
+                upload.status == UploadQueueStatus.WAITING_FOR_ACCOUNT
+            val canCancel = upload.status == UploadQueueStatus.QUEUED ||
+                upload.status == UploadQueueStatus.RETRYABLE_FAILURE ||
+                upload.status == UploadQueueStatus.PERMANENT_FAILURE ||
+                upload.status == UploadQueueStatus.WAITING_FOR_ACCOUNT
+            val canRemove = upload.status == UploadQueueStatus.COMPLETED ||
+                upload.status == UploadQueueStatus.CANCELLED
+            val quotaExceeded = upload.lastErrorCode == "STORAGE_QUOTA_EXCEEDED"
+            if (canRetry || canCancel || canRemove || quotaExceeded) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (canRetry && !quotaExceeded) {
+                        OutlinedButton(
+                            onClick = onRetry,
+                            enabled = !isActionRunning,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Retry")
+                        }
+                    }
+                    if (quotaExceeded) {
+                        OutlinedButton(
+                            onClick = onManageStorage,
+                            enabled = !isActionRunning,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Manage storage")
+                        }
+                    }
+                    if (canCancel) {
+                        OutlinedButton(
+                            onClick = onCancel,
+                            enabled = !isActionRunning,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Cancel")
+                        }
+                    }
+                    if (canRemove) {
+                        OutlinedButton(
+                            onClick = onRemove,
+                            enabled = !isActionRunning,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                Icons.Default.DeleteOutline,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Remove")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun String.toUploadStatusLabel(): String = when (this) {
+    UploadQueueStatus.QUEUED -> "Waiting for connection"
+    UploadQueueStatus.UPLOADING -> "Uploading"
+    UploadQueueStatus.RETRYABLE_FAILURE -> "Will retry"
+    UploadQueueStatus.PERMANENT_FAILURE -> "Needs attention"
+    UploadQueueStatus.WAITING_FOR_ACCOUNT -> "Waiting for account"
+    UploadQueueStatus.COMPLETED -> "Uploaded"
+    UploadQueueStatus.CANCELLED -> "Cancelled"
+    else -> "Unknown status"
 }
 
 @Composable

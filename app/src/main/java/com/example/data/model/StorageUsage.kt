@@ -10,5 +10,6 @@ data class StorageUsage(
     @Json(name = "availableBytes") val availableBytes: Long,
     @Json(name = "usagePercentage") val usagePercentage: Int,
     @Json(name = "imageCount") val imageCount: Int,
-    @Json(name = "warningLevel") val warningLevel: String
+    @Json(name = "warningLevel") val warningLevel: String,
+    @Json(name = "idempotencySupported") val idempotencySupported: Boolean? = null
 )

@@ -13,7 +13,8 @@ A modern, native Android application built with Kotlin and Jetpack Compose (Mate
 - **Networking:** Retrofit 2.12 + OkHttp 4.10 + Moshi (Kotlin JSON reflect & codegen)
 - **Image Pipeline:** Coil 2.7 with crossfade, memory & disk caching
 - **Media Picker:** Zero-permission Android Photo Picker (`ActivityResultContracts.PickVisualMedia`)
-- **Local Persistence:** Room for account-scoped image metadata and sync state; DataStore Preferences for server settings and UI state
+- **Local Persistence:** Room for account-scoped image metadata, sync state, and upload queue; DataStore Preferences for server settings and UI state
+- **Background Uploads:** WorkManager with connected-network constraints, retry/backoff, and server idempotency keys
 - **Testing:** JUnit 4 + Robolectric + Jetpack Compose UI Test Rule
 
 ---
@@ -33,18 +34,21 @@ The application interfaces directly with the following backend routes:
 | `GET` | `/image?id={id}` | Retrieve an owned image's raw bytes | Bearer token; streams binary image |
 | `DELETE` | `/image` | Delete 1 to 100 owned images by ID | Bearer token and `{"ids": ["mongo-id-1", "mongo-id-2"]}` |
 
-Image API calls use the `Authorization: Bearer <accessToken>` header. Login returns `data.user`, `data.accessToken`, and `data.expiresAt` (Unix seconds). Metadata responses omit image bytes. The backend's internal storage-usage summary is not exposed as an API endpoint.
+Image API calls use the `Authorization: Bearer <accessToken>` header. Login returns `data.user`, `data.accessToken`, and `data.expiresAt` (Unix seconds). Metadata responses omit image bytes. The authenticated storage-usage endpoint provides cloud usage and quota information.
 
 ## 3. Local-First Image Behavior
 
-> Phase 4 note: The earlier API overview sentence stating that storage usage is not exposed is outdated. The authenticated `GET /storage/usage` endpoint now provides server-calculated usage and quota information.
+The authenticated `GET /storage/usage` endpoint provides server-calculated usage and quota information.
 
 - My Images and the dashboard observe image metadata from the Room database, so previously cached records can be displayed before a network sync completes.
 - A successful list sync replaces the cached records for that normalized email account in one transaction. Other account caches are kept separate. Automatic list sync is considered fresh for two minutes; an explicit refresh bypasses that window.
-- Uploads and deletions remain online-only. Confirmed uploads are written to Room; successful or already-absent deletions remove the corresponding local records. The app does not queue mutations for later or automatically retry an upload with an uncertain network outcome.
-- The backend currently has no image-update endpoint. Cloud storage usage and quota enforcement are server-side; the app caches the last confirmed usage summary in Room, scoped to the account, and labels cached information when it may be stale.
+- Uploads can be queued offline: the app copies the selected image into app-private `files/pending_uploads`, records its account-scoped operation in Room, and schedules it with WorkManager when a network is available. The file stays local and the image is not shown as a cloud image until the server confirms the upload; successful confirmation writes metadata to Room immediately.
+- WorkManager retries uncertain uploads with the same operation ID as the `Idempotency-Key`. Before uploading, the app checks `GET /storage/usage` for `idempotencySupported: true`; missing or false support prevents the upload so retries cannot create duplicate cloud images. Update the backend before enabling queued uploads.
+- Queue entries and staged image files are isolated by the normalized signed-in account. If another account is active, the item waits until its owning account signs in again. Queue files are excluded from Android backup/device transfer; a restored queue record without its private file is marked as needing attention and can be removed.
+- Uploading still requires connectivity and a valid authenticated session. Per-account cloud quota errors require user action rather than automatic retry. Deletions remain online-only; the backend currently has no image-update endpoint.
+- Cloud storage usage and quota enforcement are server-side; the app caches the last confirmed usage summary in Room, scoped to the account, and labels cached information when it may be stale.
 - Room image and storage-usage records are partitioned by normalized account email and scoped repository calls require the matching active session. The backend separately validates bearer tokens and scopes image access/deletion by stable user ID, with an email fallback only for legacy records without an owner ID.
-- Metadata is persisted in Room; image bytes are fetched from the authenticated backend when needed. Coil provides its configured image memory/disk cache. Uploads and deletions are online-only; there is no durable mutation queue.
+- Metadata is persisted in Room; image bytes are fetched from the authenticated backend when needed. Coil provides its configured image memory/disk cache. Upload source files remain in private app storage only until the upload is confirmed or cancelled.
 
 ---
 

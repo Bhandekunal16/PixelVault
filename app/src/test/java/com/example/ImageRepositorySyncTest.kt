@@ -1,15 +1,23 @@
 package com.example
 
 import android.content.Context
+import android.content.ContextWrapper
+import android.net.Uri
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.api.NetworkClient
 import com.example.data.local.ImageDatabase
 import com.example.data.local.ImageEntity
+import com.example.data.local.PendingUploadFileStore
+import com.example.data.local.QueuedUploadEntity
 import com.example.data.local.StorageUsageEntity
+import com.example.data.local.UploadQueueStatus
 import com.example.data.preferences.AppPreferences
 import com.example.data.preferences.TokenCipher
 import com.example.data.repository.ImageRepositoryImpl
+import com.example.data.repository.QueuedUploadWorkResult
+import com.example.data.repository.UploadWorkScheduler
+import com.example.data.model.OutputFormat
 import com.example.util.Resource
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +35,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.Closeable
+import java.io.File
 import java.net.ServerSocket
 import java.util.Base64
 import java.util.concurrent.CountDownLatch
@@ -531,15 +540,186 @@ class ImageRepositorySyncTest {
         assertTrue(database.imageDao().observeStorageUsage("other@gmail.com").first() == null)
     }
 
-    private suspend fun repository(server: SingleResponseServer): ImageRepositoryImpl {
+    @Test
+    fun `queue stages image bytes locally and schedules account scoped operation`() = runBlocking {
+        val source = sourceImage()
+        val uploadContext = isolatedUploadContext()
+        val scheduler = RecordingUploadScheduler()
+        val repository = repository(
+            server(200, "{}", responseCount = 0),
+            scheduler,
+            uploadContext
+        )
+
+        val result = repository.queueUpload(
+            uploadContext,
+            Uri.fromFile(source),
+            " Person@Gmail.com ",
+            OutputFormat.WEBP
+        )
+
+        assertTrue("queue failed: ${(result as? Resource.Error)?.message}", result is Resource.Success)
+        val queued = (result as Resource.Success).data
+        assertEquals("person@gmail.com", queued.accountScope)
+        assertEquals(UploadQueueStatus.QUEUED, queued.status)
+        assertTrue(File(queued.localFilePath!!).exists())
+        assertEquals(listOf(queued.operationId), scheduler.enqueued)
+        assertEquals(queued, database.imageDao().observeQueuedUploads("person@gmail.com").first().single())
+        assertTrue(database.imageDao().observeQueuedUploads("other@gmail.com").first().isEmpty())
+        source.delete()
+        PendingUploadFileStore(uploadContext).delete(queued.localFilePath)
+        removeUploadContext(uploadContext)
+    }
+
+    @Test
+    fun `queue does not upload when backend lacks idempotency support`() = runBlocking {
+        val source = sourceImage()
+        val uploadContext = isolatedUploadContext()
+        val scheduler = RecordingUploadScheduler()
+        val server = server(
+            200,
+            """{"message":"Storage usage retrieved successfully","statusCode":200,"status":true,"data":{"usedBytes":0,"quotaBytes":1000,"availableBytes":1000,"usagePercentage":0,"imageCount":0,"warningLevel":"normal"}}""",
+            expectedMethods = listOf("GET")
+        )
+        val repository = repository(server, scheduler, uploadContext)
+        val queued = repository.queueUpload(
+            uploadContext,
+            Uri.fromFile(source),
+            "person@gmail.com",
+            OutputFormat.WEBP
+        )
+        source.delete()
+        assertTrue("queue failed: ${(queued as? Resource.Error)?.message}", queued is Resource.Success)
+        val operationId = (queued as Resource.Success).data.operationId
+
+        val result = repository.processQueuedUpload(operationId)
+        server.awaitRequest()
+
+        assertEquals(QueuedUploadWorkResult.FINISHED, result)
+        assertEquals(listOf("GET /storage/usage HTTP/1.1"), server.requestLines)
+        val persisted = database.imageDao().getQueuedUpload(operationId)!!
+        assertEquals(UploadQueueStatus.PERMANENT_FAILURE, persisted.status)
+        assertEquals("SERVER_IDEMPOTENCY_REQUIRED", persisted.lastErrorCode)
+        PendingUploadFileStore(uploadContext).delete(persisted.localFilePath)
+        removeUploadContext(uploadContext)
+    }
+
+    @Test
+    fun `transient upload errors retry with the same durable idempotency key`() = runBlocking {
+        val source = sourceImage()
+        val uploadContext = isolatedUploadContext()
+        val scheduler = RecordingUploadScheduler()
+        val server = server(
+            200,
+            "",
+            responseCount = 2,
+            responses = listOf(
+                200 to """{"message":"Storage usage retrieved successfully","statusCode":200,"status":true,"data":{"usedBytes":0,"quotaBytes":1000,"availableBytes":1000,"usagePercentage":0,"imageCount":0,"warningLevel":"normal","idempotencySupported":true}}""",
+                503 to """{"message":"Service unavailable","statusCode":503,"status":false,"data":{"errorCode":"TEMPORARY_FAILURE"}}"""
+            ),
+            expectedMethods = listOf("GET", "POST")
+        )
+        val repository = repository(server, scheduler, uploadContext)
+        val queued = repository.queueUpload(
+            uploadContext,
+            Uri.fromFile(source),
+            "person@gmail.com",
+            OutputFormat.WEBP
+        )
+        source.delete()
+        assertTrue("queue failed: ${(queued as? Resource.Error)?.message}", queued is Resource.Success)
+        val operationId = (queued as Resource.Success).data.operationId
+
+        val result = repository.processQueuedUpload(operationId)
+        server.awaitRequest(expectedCount = 2)
+
+        assertEquals(QueuedUploadWorkResult.RETRY, result)
+        val persisted = database.imageDao().getQueuedUpload(operationId)!!
+        assertEquals(UploadQueueStatus.RETRYABLE_FAILURE, persisted.status)
+        assertEquals(listOf(operationId), server.idempotencyKeys.filter(String::isNotBlank))
+        PendingUploadFileStore(uploadContext).delete(persisted.localFilePath)
+        removeUploadContext(uploadContext)
+    }
+
+    @Test
+    fun `quota rejection is retained for user action instead of automatic retry`() = runBlocking {
+        val source = sourceImage()
+        val uploadContext = isolatedUploadContext()
+        val scheduler = RecordingUploadScheduler()
+        val server = server(
+            200,
+            "",
+            responseCount = 3,
+            responses = listOf(
+                200 to """{"message":"Storage usage retrieved successfully","statusCode":200,"status":true,"data":{"usedBytes":0,"quotaBytes":1000,"availableBytes":1000,"usagePercentage":0,"imageCount":0,"warningLevel":"normal","idempotencySupported":true}}""",
+                409 to """{"message":"Account cloud storage quota exceeded","statusCode":409,"status":false,"data":{"errorCode":"STORAGE_QUOTA_EXCEEDED"}}""",
+                200 to """{"message":"Storage usage retrieved successfully","statusCode":200,"status":true,"data":{"usedBytes":1000,"quotaBytes":1000,"availableBytes":0,"usagePercentage":100,"imageCount":1,"warningLevel":"full","idempotencySupported":true}}"""
+            ),
+            expectedMethods = listOf("GET", "POST", "GET")
+        )
+        val repository = repository(server, scheduler, uploadContext)
+        val queued = repository.queueUpload(
+            uploadContext,
+            Uri.fromFile(source),
+            "person@gmail.com",
+            OutputFormat.WEBP
+        )
+        source.delete()
+        assertTrue("queue failed: ${(queued as? Resource.Error)?.message}", queued is Resource.Success)
+        val operationId = (queued as Resource.Success).data.operationId
+
+        assertEquals(
+            QueuedUploadWorkResult.FINISHED,
+            repository.processQueuedUpload(operationId)
+        )
+        server.awaitRequest(expectedCount = 3)
+
+        val persisted = database.imageDao().getQueuedUpload(operationId)!!
+        assertEquals(UploadQueueStatus.PERMANENT_FAILURE, persisted.status)
+        assertEquals("STORAGE_QUOTA_EXCEEDED", persisted.lastErrorCode)
+        assertEquals(3, server.requestCount.get())
+        PendingUploadFileStore(uploadContext).delete(persisted.localFilePath)
+        removeUploadContext(uploadContext)
+    }
+
+    private suspend fun repository(
+        server: SingleResponseServer,
+        scheduler: UploadWorkScheduler? = null,
+        uploadFileContext: Context = context
+    ): ImageRepositoryImpl {
         preferences.setBaseUrl(server.baseUrl)
         return ImageRepositoryImpl(
             preferences = preferences,
             networkClient = NetworkClient(),
             imageDao = database.imageDao(),
-            imageDatabase = database
+            imageDatabase = database,
+            uploadScheduler = scheduler,
+            applicationContext = uploadFileContext
         )
     }
+
+    private fun isolatedUploadContext(): Context =
+        object : ContextWrapper(context) {
+            private val isolatedFilesDir = File(
+                context.cacheDir,
+                "upload-files-${System.nanoTime()}"
+            ).apply {
+                check(mkdirs())
+            }
+
+            override fun getApplicationContext(): Context = this
+            override fun getFilesDir(): File = isolatedFilesDir
+        }
+
+    private fun removeUploadContext(uploadContext: Context) {
+        File(uploadContext.filesDir, "pending_uploads").delete()
+        uploadContext.filesDir.delete()
+    }
+
+    private fun sourceImage(): File =
+        File(context.cacheDir, "queued-${System.nanoTime()}.jpg").apply {
+            writeBytes(ByteArray(128) { it.toByte() })
+        }
 
     private fun server(
         status: Int,
@@ -589,12 +769,15 @@ class ImageRepositorySyncTest {
         val requestCount = AtomicInteger()
         val authorizationHeaders = java.util.concurrent.CopyOnWriteArrayList<String>()
         val requestMethods = java.util.concurrent.CopyOnWriteArrayList<String>()
+        val requestLines = java.util.concurrent.CopyOnWriteArrayList<String>()
+        val idempotencyKeys = java.util.concurrent.CopyOnWriteArrayList<String>()
         private val allRequestsReceived = CountDownLatch(responseCount)
         private val worker = Thread {
             repeat(responseCount) { requestIndex ->
                 socket.accept().use { connection ->
                     val reader = connection.getInputStream().bufferedReader()
                     val requestLine = reader.readLine() ?: error("Missing request line")
+                    requestLines.add(requestLine)
                     requestMethods.add(requestLine.substringBefore(' '))
                     expectedMethods?.get(requestIndex)?.let { expectedMethod ->
                         check(requestLine.startsWith("$expectedMethod ")) {
@@ -607,6 +790,9 @@ class ImageRepositorySyncTest {
                         if (header.isEmpty()) break
                         if (header.startsWith("Authorization:", ignoreCase = true)) {
                             authorizationHeaders.add(header.substringAfter(':').trim())
+                        }
+                        if (header.startsWith("Idempotency-Key:", ignoreCase = true)) {
+                            idempotencyKeys.add(header.substringAfter(':').trim())
                         }
                         if (header.startsWith("Content-Length:", ignoreCase = true)) {
                             contentLength = header.substringAfter(':').trim().toInt()
@@ -666,5 +852,15 @@ class ImageRepositorySyncTest {
 
         override fun decrypt(encoded: String): String =
             String(Base64.getDecoder().decode(encoded), Charsets.UTF_8)
+    }
+
+    private class RecordingUploadScheduler : UploadWorkScheduler {
+        val enqueued = mutableListOf<String>()
+
+        override suspend fun enqueue(operationId: String) {
+            enqueued.add(operationId)
+        }
+
+        override suspend fun cancel(operationId: String) = Unit
     }
 }

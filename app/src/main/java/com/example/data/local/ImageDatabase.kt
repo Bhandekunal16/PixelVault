@@ -8,8 +8,13 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [ImageEntity::class, ImageSyncStateEntity::class, StorageUsageEntity::class],
-    version = 2,
+    entities = [
+        ImageEntity::class,
+        ImageSyncStateEntity::class,
+        StorageUsageEntity::class,
+        QueuedUploadEntity::class
+    ],
+    version = 3,
     exportSchema = false
 )
 abstract class ImageDatabase : RoomDatabase() {
@@ -37,6 +42,40 @@ abstract class ImageDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS queued_uploads (
+                        operationId TEXT NOT NULL,
+                        accountScope TEXT NOT NULL,
+                        localFilePath TEXT,
+                        originalFilename TEXT NOT NULL,
+                        mimeType TEXT NOT NULL,
+                        fileSizeBytes INTEGER NOT NULL,
+                        outputFormat TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        attempts INTEGER NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        lastErrorCode TEXT,
+                        lastErrorMessage TEXT,
+                        serverImageId TEXT,
+                        PRIMARY KEY(operationId)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_queued_uploads_accountScope_status " +
+                        "ON queued_uploads(accountScope, status)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_queued_uploads_accountScope_createdAt " +
+                        "ON queued_uploads(accountScope, createdAt)"
+                )
+            }
+        }
+
         @Volatile
         private var instance: ImageDatabase? = null
 
@@ -46,7 +85,7 @@ abstract class ImageDatabase : RoomDatabase() {
                     context.applicationContext,
                     ImageDatabase::class.java,
                     "pixel_vault_images.db"
-                ).addMigrations(MIGRATION_1_2)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build().also { instance = it }
             }
     }

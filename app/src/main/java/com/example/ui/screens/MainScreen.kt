@@ -66,6 +66,7 @@ fun MainScreen(
     onLogout: () -> Unit
 ) {
     val baseUrl by preferences.baseUrlFlow.collectAsState(initial = AppPreferences.DEFAULT_BASE_URL)
+    val uploadUiState by uploadViewModel.uiState.collectAsState()
     val haptic = rememberHapticHelper()
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -214,6 +215,7 @@ fun MainScreen(
                     HomeScreen(
                         viewModel = dashboardViewModel,
                         baseUrl = baseUrl,
+                        pendingUploadCount = uploadUiState.pendingUploadCount,
                         onNavigateToUpload = { currentTab = BottomNavTab.Upload.route },
                         onNavigateToImages = { currentTab = BottomNavTab.Images.route },
                         onImageSelected = { selectedImageForDetail = it },
@@ -239,6 +241,7 @@ fun MainScreen(
                     ImagesListScreen(
                         viewModel = imagesViewModel,
                         baseUrl = baseUrl,
+                        pendingUploadCount = uploadUiState.pendingUploadCount,
                         onNavigateToUpload = { currentTab = BottomNavTab.Upload.route },
                         onImageSelected = { selectedImageForDetail = it }
                     )
