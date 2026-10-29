@@ -79,7 +79,7 @@ fun HomeScreen(
     val haptic = rememberHapticHelper()
 
     LaunchedEffect(Unit) {
-        viewModel.loadDashboardData()
+        viewModel.syncDashboardIfStale()
     }
 
     Column(
@@ -113,7 +113,7 @@ fun HomeScreen(
                 IconButton(
                     onClick = {
                         haptic.click()
-                        viewModel.loadDashboardData()
+                        viewModel.refreshDashboardData()
                     },
                     modifier = Modifier.testTag("refresh_dashboard_button")
                 ) {
@@ -145,7 +145,7 @@ fun HomeScreen(
             StatusBanner(
                 message = uiState.errorMessage!!,
                 isError = true,
-                onDismiss = { viewModel.loadDashboardData() }
+                onDismiss = { viewModel.refreshDashboardData() }
             )
             Spacer(modifier = Modifier.height(16.dp))
         }
@@ -186,7 +186,7 @@ fun HomeScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
-                    if (uiState.isLoading) {
+                    if (uiState.isLoading || uiState.isSyncing) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
                             strokeWidth = 2.dp,
@@ -440,7 +440,7 @@ fun RecentImageCard(
                         .data(imageUrl)
                         .crossfade(true)
                         .build(),
-                    contentDescription = image.filename,
+                    contentDescription = image.effectiveFilename,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -464,7 +464,7 @@ fun RecentImageCard(
 
             Column(modifier = Modifier.padding(10.dp)) {
                 Text(
-                    text = image.filename ?: "Untitled Image",
+                    text = image.effectiveFilename ?: "Untitled Image",
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,

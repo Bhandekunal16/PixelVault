@@ -2,23 +2,34 @@ package com.example.data.repository
 
 import android.content.Context
 import android.net.Uri
+import androidx.room.withTransaction
+import com.example.data.api.ApiService
 import com.example.data.api.NetworkClient
 import com.example.data.api.NetworkErrorHandler
-import com.example.data.model.DeleteImagesRequest
+import com.example.data.local.ImageDao
+import com.example.data.local.ImageDatabase
+import com.example.data.local.ImageEntity
+import com.example.data.local.ImageSyncStateEntity
+import com.example.data.local.toEntity
 import com.example.data.model.ImageMetadata
 import com.example.data.model.OutputFormat
 import com.example.data.preferences.AppPreferences
 import com.example.util.FileUtils
 import com.example.util.Resource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 interface ImageRepository {
     fun uploadImage(
@@ -28,7 +39,13 @@ interface ImageRepository {
         format: OutputFormat
     ): Flow<Resource<ImageMetadata>>
 
-    fun getImages(email: String): Flow<Resource<List<ImageMetadata>>>
+    fun observeImages(email: String): Flow<List<ImageMetadata>>
+
+    fun observeSyncState(email: String): Flow<ImageSyncStateEntity?>
+
+    suspend fun synchronizeImages(email: String, forceRefresh: Boolean = false): Resource<Unit>
+
+    suspend fun removeCachedImages(email: String, ids: List<String>)
 
     fun getImageBytes(id: String): Flow<Resource<ByteArray>>
 
@@ -46,8 +63,66 @@ interface ImageRepository {
 
 class ImageRepositoryImpl(
     private val preferences: AppPreferences,
-    private val networkClient: NetworkClient
+    private val networkClient: NetworkClient,
+    private val imageDao: ImageDao,
+    private val imageDatabase: ImageDatabase
 ) : ImageRepository {
+
+    private val accountLocks = ConcurrentHashMap<String, Mutex>()
+
+    override fun observeImages(email: String): Flow<List<ImageMetadata>> =
+        imageDao.observeImages(normalizeAccount(email)).map { rows -> rows.map(ImageEntity::toMetadata) }
+
+    override fun observeSyncState(email: String): Flow<ImageSyncStateEntity?> =
+        imageDao.observeSyncState(normalizeAccount(email))
+
+    override suspend fun synchronizeImages(
+        email: String,
+        forceRefresh: Boolean
+    ): Resource<Unit> {
+        val account = normalizeAccount(email)
+        if (account.isBlank()) return Resource.Error("A signed-in account is required to sync images.")
+
+        val requestedAt = System.currentTimeMillis()
+        return accountLock(account).withLock {
+            val now = System.currentTimeMillis()
+            val previousState = imageDao.getSyncState(account)
+            val lastSync = previousState?.lastSuccessfulSyncAt
+            if (lastSync != null &&
+                ((!forceRefresh && now - lastSync < SYNC_FRESHNESS_MILLIS) ||
+                    (forceRefresh && lastSync >= requestedAt))
+            ) {
+                return@withLock Resource.Success(Unit)
+            }
+
+            try {
+                val api = apiService()
+                val metadata = fetchServerImages(api, account)
+                val entities = metadata.mapNotNull { it.toEntity(account, now) }
+
+                imageDatabase.withTransaction {
+                    imageDao.replaceAccountImages(account, entities)
+                    imageDao.upsertSyncState(
+                        ImageSyncStateEntity(
+                            accountScope = account,
+                            lastSuccessfulSyncAt = now,
+                            lastSyncError = null
+                        )
+                    )
+                }
+                Resource.Success(Unit)
+            } catch (e: RemoteImageException) {
+                persistSyncError(account, previousState, e.message ?: "Image sync failed.")
+                Resource.Error(e.message ?: "Image sync failed.", e, e.statusCode)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val message = NetworkErrorHandler.parseException(e)
+                persistSyncError(account, previousState, message)
+                Resource.Error(message, e)
+            }
+        }
+    }
 
     override fun uploadImage(
         context: Context,
@@ -56,6 +131,11 @@ class ImageRepositoryImpl(
         format: OutputFormat
     ): Flow<Resource<ImageMetadata>> = flow {
         emit(Resource.Loading)
+        val account = normalizeAccount(email)
+        if (account.isBlank()) {
+            emit(Resource.Error("A valid account is required to upload an image."))
+            return@flow
+        }
 
         val size = FileUtils.getFileSize(context, uri)
         if (size > FileUtils.MAX_IMAGE_BYTES) {
@@ -69,120 +149,56 @@ class ImageRepositoryImpl(
             return@flow
         }
 
-        try {
-            val baseUrl = preferences.baseUrlFlow.first()
-            val api = networkClient.getApiService(baseUrl)
+        accountLock(account).withLock {
+            try {
+                val api = apiService()
+                val response = api.uploadImage(
+                    image = part,
+                    email = account.toRequestBody("text/plain".toMediaTypeOrNull()),
+                    format = format.apiValue.toRequestBody("text/plain".toMediaTypeOrNull())
+                )
 
-            val emailBody = email.trim().toRequestBody("text/plain".toMediaTypeOrNull())
-            val formatBody = format.apiValue.toRequestBody("text/plain".toMediaTypeOrNull())
+                if (!response.isSuccessful) {
+                    emit(Resource.Error(NetworkErrorHandler.parseError(response), statusCode = response.code()))
+                    return@withLock
+                }
 
-            val response = api.uploadImage(image = part, email = emailBody, format = formatBody)
-
-            if (response.isSuccessful) {
                 val metadata = response.body()?.data
-                if (metadata != null) {
-                    emit(Resource.Success(metadata))
-                } else {
-                    emit(Resource.Success(ImageMetadata(filename = FileUtils.getFileName(context, uri), format = format.label)))
+                if (metadata == null || metadata.effectiveId.isBlank()) {
+                    emit(Resource.Error("The server reported upload success without valid image metadata."))
+                    return@withLock
                 }
-            } else {
-                emit(Resource.Error(NetworkErrorHandler.parseError(response)))
+
+                val uploadedAt = System.currentTimeMillis()
+                val entity = metadata.toEntity(account, uploadedAt)
+                if (entity == null) {
+                    emit(Resource.Error("The server response did not contain a valid image ID."))
+                    return@withLock
+                }
+                imageDao.upsertImages(listOf(entity))
+                emit(Resource.Success(metadata))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val message = if (e is java.io.IOException) {
+                    "Upload outcome is unknown because the connection was interrupted. Refresh My Images before retrying."
+                } else {
+                    NetworkErrorHandler.parseException(e)
+                }
+                emit(Resource.Error(message, e))
             }
-        } catch (e: Exception) {
-            emit(Resource.Error(NetworkErrorHandler.parseException(e), e))
         }
     }.flowOn(Dispatchers.IO)
 
-    /**
-     * Retrieves all image metadata associated with the provided email.
-     * Note: A 404 response means no images exist for this email, handled gracefully as empty list.
-     */
-    override fun getImages(email: String): Flow<Resource<List<ImageMetadata>>> = flow {
-        emit(Resource.Loading)
-        try {
-            val baseUrl = preferences.baseUrlFlow.first()
-            val api = networkClient.getApiService(baseUrl)
-
-            val response = api.getImagesByEmail(email = email.trim())
-
-            if (response.isSuccessful) {
-                val list = response.body()?.data ?: emptyList()
-                emit(Resource.Success(list))
-            } else if (response.code() == 404) {
-                // User has no uploaded images yet; treat 404 as valid empty list
-                emit(Resource.Success(emptyList()))
-            } else {
-                // Try fallback raw parsing in case the backend returns a raw array or alternative JSON
-                val rawResponse = api.getImagesByEmailRaw(email.trim())
-                if (rawResponse.isSuccessful) {
-                    val jsonStr = rawResponse.body()?.string() ?: ""
-                    val parsed = parseImagesJson(jsonStr)
-                    emit(Resource.Success(parsed))
-                } else if (rawResponse.code() == 404) {
-                    emit(Resource.Success(emptyList()))
-                } else {
-                    emit(Resource.Error(NetworkErrorHandler.parseError(rawResponse)))
-                }
-            }
-        } catch (e: Exception) {
-            emit(Resource.Error(NetworkErrorHandler.parseException(e), e))
-        }
-    }.flowOn(Dispatchers.IO)
-
-    private fun parseImagesJson(jsonStr: String): List<ImageMetadata> {
-        val list = mutableListOf<ImageMetadata>()
-        try {
-            if (jsonStr.trim().startsWith("[")) {
-                val array = JSONArray(jsonStr)
-                for (i in 0 until array.length()) {
-                    val obj = array.getJSONObject(i)
-                    list.add(jsonToImageMetadata(obj))
-                }
-            } else if (jsonStr.trim().startsWith("{")) {
-                val obj = JSONObject(jsonStr)
-                if (obj.has("data") && obj.get("data") is JSONArray) {
-                    val array = obj.getJSONArray("data")
-                    for (i in 0 until array.length()) {
-                        list.add(jsonToImageMetadata(array.getJSONObject(i)))
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            // Return whatever parsed so far
-        }
-        return list
-    }
-
-    private fun jsonToImageMetadata(obj: JSONObject): ImageMetadata {
-        return ImageMetadata(
-            id = (obj.optString("id").takeIf { it.isNotBlank() } ?: obj.optString("_id").takeIf { it.isNotBlank() }),
-            filename = obj.optString("filename").takeIf { it.isNotBlank() },
-            mimetype = obj.optString("mimetype").takeIf { it.isNotBlank() },
-            format = obj.optString("format").takeIf { it.isNotBlank() },
-            width = if (obj.has("width")) obj.optInt("width") else null,
-            height = if (obj.has("height")) obj.optInt("height") else null,
-            originalSize = if (obj.has("originalSize")) obj.optLong("originalSize") else null,
-            storedSize = if (obj.has("storedSize")) obj.optLong("storedSize") else null,
-            isOptimized = if (obj.has("isOptimized")) obj.optBoolean("isOptimized") else null,
-            optimized = if (obj.has("optimized")) obj.optBoolean("optimized") else null,
-            checksum = obj.optString("checksum").takeIf { it.isNotBlank() },
-            createdAt = obj.optString("createdAt").takeIf { it.isNotBlank() },
-            uploadDate = obj.optString("uploadDate").takeIf { it.isNotBlank() },
-            email = obj.optString("email").takeIf { it.isNotBlank() }
-        )
-    }
-
-    /**
-     * Retrieves original stored image bytes as binary data.
-     * The response Content-Type is image stream (not JSON).
-     */
     override fun getImageBytes(id: String): Flow<Resource<ByteArray>> = flow {
         emit(Resource.Loading)
-        try {
-            val baseUrl = preferences.baseUrlFlow.first()
-            val api = networkClient.getApiService(baseUrl)
-            val response = api.getImageBytes(id)
+        if (id.isBlank()) {
+            emit(Resource.Error("A valid image ID is required."))
+            return@flow
+        }
 
+        try {
+            val response = apiService().getImageBytes(id)
             if (response.isSuccessful) {
                 val bytes = response.body()?.bytes()
                 if (bytes != null && bytes.isNotEmpty()) {
@@ -198,56 +214,103 @@ class ImageRepositoryImpl(
                     )
                 )
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             emit(Resource.Error(NetworkErrorHandler.parseException(e), e))
         }
     }.flowOn(Dispatchers.IO)
 
-    /**
-     * Deletes images by ID.
-     *
-     * BACKEND LIMITATION NOTE:
-     * The backend currently does not require authentication or ownership authorization for deletion.
-     * Anyone sending valid IDs can delete records. This backend limitation should be hardened
-     * in production by enforcing user ownership checks on the server.
-     */
+    override suspend fun removeCachedImages(email: String, ids: List<String>) {
+        val account = normalizeAccount(email)
+        val validIds = ids.filter(String::isNotBlank).distinct()
+        if (account.isNotBlank() && validIds.isNotEmpty()) {
+            imageDao.deleteImages(account, validIds)
+        }
+    }
+
     override fun deleteImages(ids: List<String>): Flow<Resource<Int>> = flow {
         emit(Resource.Loading)
-        if (ids.isEmpty()) {
-            emit(Resource.Success(0))
+        val validIds = ids.filter(String::isNotBlank).distinct()
+        if (validIds.isEmpty()) {
+            emit(Resource.Error("At least one valid image ID is required."))
             return@flow
         }
-        if (ids.size > 100) {
-            emit(Resource.Error("Backend supports deleting at most 100 images per request."))
-            return@flow
-        }
-        try {
-            val baseUrl = preferences.baseUrlFlow.first()
-            val api = networkClient.getApiService(baseUrl)
-            val response = api.deleteImages(DeleteImagesRequest(ids = ids))
 
-            if (response.isSuccessful) {
-                val deletedCount = response.body()?.data?.deletedCount ?: ids.size
+        val account = normalizeAccount(preferences.userEmailFlow.first().orEmpty())
+        if (account.isBlank()) {
+            emit(Resource.Error("A signed-in account is required to delete images."))
+            return@flow
+        }
+
+        accountLock(account).withLock {
+            try {
+                val api = apiService()
+                val response = api.deleteImages(com.example.data.model.DeleteImagesRequest(ids = validIds))
+                if (!response.isSuccessful) {
+                    if (response.code() == 404 && isImageNotFound(response.errorBody()?.string())) {
+                        imageDao.deleteImages(account, validIds)
+                        emit(Resource.Success(0))
+                    } else {
+                        emit(Resource.Error(NetworkErrorHandler.parseError(response), statusCode = response.code()))
+                    }
+                    return@withLock
+                }
+
+                val deletedCount = response.body()?.data
+                if (deletedCount == null || deletedCount !in 0..validIds.size) {
+                    emit(Resource.Error("The server returned an invalid delete response."))
+                    return@withLock
+                }
+
+                if (deletedCount == validIds.size) {
+                    imageDao.deleteImages(account, validIds)
+                } else {
+                    val remainingRemoteImages = fetchServerImages(api, account)
+                    val remainingIds = remainingRemoteImages.mapTo(HashSet()) { it.effectiveId }
+                    val confirmedMissing = validIds.filterNot(remainingIds::contains)
+                    imageDatabase.withTransaction {
+                        imageDao.deleteImages(account, confirmedMissing)
+                        val now = System.currentTimeMillis()
+                        imageDao.replaceAccountImages(
+                            account,
+                            remainingRemoteImages.mapNotNull { it.toEntity(account, now) }
+                        )
+                        imageDao.upsertSyncState(
+                            ImageSyncStateEntity(
+                                accountScope = account,
+                                lastSuccessfulSyncAt = now,
+                                lastSyncError = null
+                            )
+                        )
+                    }
+                    if (confirmedMissing.size != validIds.size) {
+                        emit(Resource.Error("Some selected images could not be deleted."))
+                        return@withLock
+                    }
+                }
                 emit(Resource.Success(deletedCount))
-            } else {
-                emit(Resource.Error(NetworkErrorHandler.parseError(response)))
+            } catch (e: RemoteImageException) {
+                emit(Resource.Error(e.message ?: "Could not verify image deletion.", e, e.statusCode))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                emit(Resource.Error(NetworkErrorHandler.parseException(e), e))
             }
-        } catch (e: Exception) {
-            emit(Resource.Error(NetworkErrorHandler.parseException(e), e))
         }
     }.flowOn(Dispatchers.IO)
 
     override fun checkServerHealth(): Flow<Resource<Boolean>> = flow {
         emit(Resource.Loading)
         try {
-            val baseUrl = preferences.baseUrlFlow.first()
-            val api = networkClient.getApiService(baseUrl)
-            val response = api.checkHealth()
+            val response = apiService().checkHealth()
             if (response.isSuccessful) {
                 emit(Resource.Success(true))
             } else {
-                emit(Resource.Error("Server returned HTTP ${response.code()}"))
+                emit(Resource.Error("Server returned HTTP ${response.code()}", statusCode = response.code()))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             emit(Resource.Error(NetworkErrorHandler.parseException(e), e))
         }
@@ -258,7 +321,72 @@ class ImageRepositoryImpl(
         bytes: ByteArray,
         filename: String,
         mimeType: String
-    ): Result<Uri> {
-        return FileUtils.saveBytesToDownloads(context, bytes, filename, mimeType)
+    ): Result<Uri> = FileUtils.saveBytesToDownloads(context, bytes, filename, mimeType)
+
+    private suspend fun fetchServerImages(api: ApiService, account: String): List<ImageMetadata> {
+        val response = api.getImagesByEmail(account)
+        if (response.isSuccessful) {
+            val body = response.body()
+                ?: throw RemoteImageException("The server returned an empty image-list response.")
+            val images = body.data
+                ?: throw RemoteImageException("The server response did not contain image metadata.")
+            val ids = images.map(ImageMetadata::effectiveId)
+            if (ids.any(String::isBlank) || ids.toSet().size != ids.size) {
+                throw RemoteImageException("The server returned invalid or duplicate image IDs.")
+            }
+            return images
+        }
+
+        if (response.code() == 404) {
+            val errorBody = response.errorBody()?.string()
+            if (isImageNotFound(errorBody)) return emptyList()
+            throw RemoteImageException("The server returned an unrecognized 404 for the image list.", 404)
+        }
+
+        throw RemoteImageException(
+            NetworkErrorHandler.parseError(response),
+            response.code()
+        )
+    }
+
+    private suspend fun persistSyncError(
+        account: String,
+        previousState: ImageSyncStateEntity?,
+        message: String
+    ) {
+        imageDao.upsertSyncState(
+            ImageSyncStateEntity(
+                accountScope = account,
+                lastSuccessfulSyncAt = previousState?.lastSuccessfulSyncAt,
+                lastSyncError = message
+            )
+        )
+    }
+
+    private suspend fun apiService(): ApiService {
+        val baseUrl = preferences.baseUrlFlow.first()
+        return networkClient.getApiService(baseUrl)
+    }
+
+    private fun accountLock(account: String): Mutex =
+        accountLocks.computeIfAbsent(account) { Mutex() }
+
+    private fun normalizeAccount(email: String): String =
+        email.trim().lowercase(Locale.ROOT)
+
+    private fun isImageNotFound(body: String?): Boolean = try {
+        body?.let { JSONObject(it).optString("message") == IMAGE_NOT_FOUND_MESSAGE } == true
+    } catch (_: Exception) {
+        false
+    }
+
+    private class RemoteImageException(
+        message: String,
+        val statusCode: Int? = null
+    ) : Exception(message)
+
+    private companion object {
+        const val SYNC_FRESHNESS_MILLIS = 2 * 60 * 1000L
+        const val IMAGE_NOT_FOUND_MESSAGE = "Image not found"
     }
 }

@@ -74,21 +74,18 @@ fun MainScreen(
 
     // If an image is selected, display detail screen
     if (selectedImageForDetail != null) {
+        val selectedImage = selectedImageForDetail!!
         ImageDetailScreen(
-            metadata = selectedImageForDetail!!,
+            metadata = selectedImage,
             baseUrl = baseUrl,
             viewModel = detailViewModel,
             onNavigateBack = {
                 selectedImageForDetail = null
-                // Refresh list when returning from detail
-                imagesViewModel.loadImages(isRefresh = true)
-                dashboardViewModel.loadDashboardData()
             },
             onImageDeleted = {
                 selectedImageForDetail = null
                 currentTab = BottomNavTab.Images.route
-                imagesViewModel.loadImages(isRefresh = true)
-                dashboardViewModel.loadDashboardData()
+                imagesViewModel.confirmDeleted(selectedImage.effectiveId)
                 coroutineScope.launch {
                     snackbarHostState.showSnackbar(
                         message = "Image deleted successfully",
@@ -228,8 +225,6 @@ fun MainScreen(
                     UploadScreen(
                         viewModel = uploadViewModel,
                         onUploadSuccess = {
-                            imagesViewModel.loadImages(isRefresh = true)
-                            dashboardViewModel.loadDashboardData()
                             currentTab = BottomNavTab.Images.route
                             coroutineScope.launch {
                                 snackbarHostState.showSnackbar(

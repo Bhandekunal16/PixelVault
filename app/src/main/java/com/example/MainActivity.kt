@@ -17,6 +17,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.data.api.NetworkClient
+import com.example.data.local.ImageDatabase
 import com.example.data.preferences.AppPreferences
 import com.example.data.repository.AuthRepositoryImpl
 import com.example.data.repository.ImageRepositoryImpl
@@ -83,7 +84,13 @@ class MainActivity : FragmentActivity() {
         )
 
         authRepository = AuthRepositoryImpl(preferences, networkClient)
-        imageRepository = ImageRepositoryImpl(preferences, networkClient)
+        val imageDatabase = ImageDatabase.getInstance(applicationContext)
+        imageRepository = ImageRepositoryImpl(
+            preferences = preferences,
+            networkClient = networkClient,
+            imageDao = imageDatabase.imageDao(),
+            imageDatabase = imageDatabase
+        )
         viewModelFactory = AppViewModelFactory(
             authRepository = authRepository,
             imageRepository = imageRepository,

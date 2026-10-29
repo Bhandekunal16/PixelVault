@@ -88,7 +88,7 @@ fun ImageDetailScreen(
     if (showDeleteConfirm) {
         ConfirmationDialog(
             title = "Delete Image?",
-            message = "Are you sure you want to delete '${metadata.filename ?: metadata.effectiveId}'? This operation cannot be undone.",
+            message = "Are you sure you want to delete '${metadata.effectiveFilename ?: metadata.effectiveId}'? This operation cannot be undone.",
             confirmLabel = "Delete",
             onConfirm = {
                 showDeleteConfirm = false
@@ -104,7 +104,7 @@ fun ImageDetailScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = metadata.filename ?: "Image Detail",
+                        text = metadata.effectiveFilename ?: "Image Detail",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
@@ -132,7 +132,7 @@ fun ImageDetailScreen(
                     IconButton(
                         onClick = {
                             haptic.click()
-                            viewModel.fetchImageBytes(metadata.effectiveId)
+                            viewModel.fetchImageBytes(metadata.effectiveId, forceRefresh = true)
                         },
                         modifier = Modifier.testTag("detail_refresh_button")
                     ) {
@@ -197,7 +197,7 @@ fun ImageDetailScreen(
                             .data(imageSource)
                             .crossfade(true)
                             .build(),
-                        contentDescription = metadata.filename,
+                        contentDescription = metadata.effectiveFilename,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
                             .fillMaxSize()
@@ -288,9 +288,9 @@ fun ImageDetailScreen(
                     )
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    MetadataItem("Filename", metadata.filename ?: "Untitled")
+                    MetadataItem("Filename", metadata.effectiveFilename ?: "Untitled")
                     MetadataItem("Image ID", metadata.effectiveId)
-                    MetadataItem("Format / MIME", "${metadata.effectiveFormat} (${metadata.mimetype ?: "unknown"})")
+                    MetadataItem("Format / MIME", "${metadata.effectiveFormat} (${metadata.effectiveMimeType ?: "unknown"})")
 
                     if (metadata.width != null && metadata.height != null) {
                         MetadataItem("Dimensions", "${metadata.width} × ${metadata.height} pixels")

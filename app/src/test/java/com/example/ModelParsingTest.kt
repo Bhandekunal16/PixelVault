@@ -3,7 +3,6 @@ package com.example
 import com.example.data.model.ApiResponse
 import com.example.data.model.ImageMetadata
 import com.example.data.model.LoginData
-import com.example.data.model.User
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -50,7 +49,7 @@ class ModelParsingTest {
     }
 
     @Test
-    fun `parse image metadata list and compute compression savings`() {
+    fun `parse backend image metadata fields and compute compression savings`() {
         val json = """
             {
                 "message": "Images retrieved",
@@ -58,14 +57,14 @@ class ModelParsingTest {
                 "data": [
                     {
                         "_id": "img123",
-                        "filename": "sunset.webp",
-                        "mimetype": "image/webp",
+                        "name": "sunset.webp",
+                        "mimeType": "image/webp",
                         "format": "webp",
                         "width": 1920,
                         "height": 1080,
                         "originalSize": 2000000,
                         "storedSize": 800000,
-                        "isOptimized": true
+                        "optimized": true
                     }
                 ]
             }
@@ -83,10 +82,38 @@ class ModelParsingTest {
 
         val image = images!![0]
         assertEquals("img123", image.effectiveId)
+        assertEquals("sunset.webp", image.effectiveFilename)
+        assertEquals("image/webp", image.effectiveMimeType)
         assertEquals("WEBP", image.effectiveFormat)
         assertEquals(1200000L, image.savingsBytes)
         assertEquals(60, image.savingsPercentage)
         assertTrue(image.effectiveOptimized)
+    }
+
+    @Test
+    fun `parse numeric delete response data returned by backend`() {
+        val json = """
+            {
+                "message": "Images deleted successfully",
+                "statusCode": 200,
+                "status": true,
+                "data": 2
+            }
+        """.trimIndent()
+
+        val type = Types.newParameterizedType(ApiResponse::class.java, Int::class.javaObjectType)
+        val response = moshi.adapter<ApiResponse<Int>>(type).fromJson(json)
+
+        assertEquals(2, response?.data)
+    }
+
+    @Test
+    fun `legacy image metadata names remain readable`() {
+        val json = """{"filename":"legacy.jpg","mimetype":"image/jpeg"}"""
+        val metadata = moshi.adapter(ImageMetadata::class.java).fromJson(json)
+
+        assertEquals("legacy.jpg", metadata?.effectiveFilename)
+        assertEquals("image/jpeg", metadata?.effectiveMimeType)
     }
 
     @Test

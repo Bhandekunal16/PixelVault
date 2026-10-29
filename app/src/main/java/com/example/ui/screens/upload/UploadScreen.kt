@@ -149,8 +149,8 @@ fun UploadScreen(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     UploadResultRow("Image ID", meta.effectiveId)
-                    UploadResultRow("Stored Filename", meta.filename ?: "N/A")
-                    UploadResultRow("MIME Type", meta.mimetype ?: "N/A")
+                    UploadResultRow("Stored Filename", meta.effectiveFilename ?: "N/A")
+                    UploadResultRow("MIME Type", meta.effectiveMimeType ?: "N/A")
                     if (meta.width != null && meta.height != null) {
                         UploadResultRow("Dimensions", "${meta.width} × ${meta.height} px")
                     }

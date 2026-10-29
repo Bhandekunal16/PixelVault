@@ -13,7 +13,7 @@ A modern, native Android application built with Kotlin and Jetpack Compose (Mate
 - **Networking:** Retrofit 2.12 + OkHttp 4.10 + Moshi (Kotlin JSON reflect & codegen)
 - **Image Pipeline:** Coil 2.7 with crossfade, memory & disk caching
 - **Media Picker:** Zero-permission Android Photo Picker (`ActivityResultContracts.PickVisualMedia`)
-- **Local Persistence:** Jetpack DataStore Preferences for server settings and UI state
+- **Local Persistence:** Room for account-scoped image metadata and sync state; DataStore Preferences for server settings and UI state
 - **Testing:** JUnit 4 + Robolectric + Jetpack Compose UI Test Rule
 
 ---
@@ -34,9 +34,17 @@ The application interfaces directly with the following backend routes:
 
 The backend's email-based metadata lookup omits image bytes, while image downloads return only the selected image and its response metadata. The backend also has an internal per-email storage-usage summary, but it is not exposed as an API endpoint and is not available to the app.
 
+## 3. Local-First Image Behavior
+
+- My Images and the dashboard observe image metadata from the Room database, so previously cached records can be displayed before a network sync completes.
+- A successful list sync replaces the cached records for that normalized email account in one transaction. Other account caches are kept separate. Automatic list sync is considered fresh for two minutes; an explicit refresh bypasses that window.
+- Uploads and deletions remain online-only. Confirmed uploads are written to Room; successful or already-absent deletions remove the corresponding local records. The app does not queue mutations for later or automatically retry an upload with an uncertain network outcome.
+- The backend currently has no image-update endpoint. Its existing per-email usage aggregation is internal only; the app does not show fabricated usage or enforce a quota.
+- Local email scoping separates cached records in the app, but it is not authorization. The current backend does not authenticate these requests or verify ownership on image deletion.
+
 ---
 
-## 3. How to Start the Existing Node.js Backend
+## 4. How to Start the Existing Node.js Backend
 
 1. Navigate to your Node.js Express backend project directory:
    ```bash
@@ -59,7 +67,7 @@ The backend's email-based metadata lookup omits image bytes, while image downloa
 
 ---
 
-## 4. Configuring Backend Base URL
+## 5. Configuring Backend Base URL
 
 The application includes an in-app **Server Configuration** editor in the **Settings** tab with instant connection testing (`GET /` ping with latency readout):
 
@@ -85,7 +93,7 @@ The application includes an in-app **Server Configuration** editor in the **Sett
 
 ---
 
-## 5. Optional Response Encryption Compatibility
+## 6. Optional Response Encryption Compatibility
 
 When the backend has `encryption_Interceptor` enabled, JSON responses are returned in the wrapper format:
 ```json
@@ -101,7 +109,7 @@ When the backend has `encryption_Interceptor` enabled, JSON responses are return
 
 ---
 
-## 6. How to Open and Run in Android Studio
+## 7. How to Open and Run in Android Studio
 
 1. Open Android Studio (Ladybug / Iguana or later).
 2. Select **File > Open** and choose this project root folder.
@@ -111,7 +119,7 @@ When the backend has `encryption_Interceptor` enabled, JSON responses are return
 
 ---
 
-## 7. How to Build the APK
+## 8. How to Build the APK
 
 To compile and build a release or debug APK from the command line:
 
@@ -128,7 +136,7 @@ The APK will be generated at:
 
 ---
 
-## 8. Backend Security Limitations & Production Hardening
+## 9. Backend Security Limitations & Production Hardening
 
 Before deploying this system to production, the following security limitations of the current Node.js Express backend must be addressed:
 

@@ -7,7 +7,9 @@ import com.squareup.moshi.JsonClass
 data class ImageMetadata(
     @Json(name = "id") val id: String? = null,
     @Json(name = "_id") val mongoId: String? = null,
+    @Json(name = "name") val name: String? = null,
     @Json(name = "filename") val filename: String? = null,
+    @Json(name = "mimeType") val mimeType: String? = null,
     @Json(name = "mimetype") val mimetype: String? = null,
     @Json(name = "format") val format: String? = null,
     @Json(name = "width") val width: Int? = null,
@@ -24,12 +26,18 @@ data class ImageMetadata(
     val effectiveId: String
         get() = id ?: mongoId ?: ""
 
+    val effectiveFilename: String?
+        get() = name ?: filename
+
+    val effectiveMimeType: String?
+        get() = mimeType ?: mimetype
+
     val effectiveOptimized: Boolean
         get() = isOptimized == true || optimized == true
 
     val effectiveFormat: String
         get() = format?.uppercase()
-            ?: mimetype?.substringAfter('/')?.uppercase()
+            ?: effectiveMimeType?.substringAfter('/')?.uppercase()
             ?: "IMG"
 
     val effectiveDate: String
@@ -55,12 +63,6 @@ data class ImageMetadata(
 @JsonClass(generateAdapter = true)
 data class DeleteImagesRequest(
     @Json(name = "ids") val ids: List<String>
-)
-
-@JsonClass(generateAdapter = true)
-data class DeleteImagesData(
-    @Json(name = "deletedCount") val deletedCount: Int? = null,
-    @Json(name = "acknowledged") val acknowledged: Boolean? = null
 )
 
 /**

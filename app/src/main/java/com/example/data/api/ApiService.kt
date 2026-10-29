@@ -1,7 +1,6 @@
 package com.example.data.api
 
 import com.example.data.model.ApiResponse
-import com.example.data.model.DeleteImagesData
 import com.example.data.model.DeleteImagesRequest
 import com.example.data.model.ImageMetadata
 import com.example.data.model.LoginData
@@ -95,5 +94,5 @@ interface ApiService {
     @HTTP(method = "DELETE", path = "/image", hasBody = true)
     suspend fun deleteImages(
         @Body request: DeleteImagesRequest
-    ): Response<ApiResponse<DeleteImagesData>>
+    ): Response<ApiResponse<Int>>
 }

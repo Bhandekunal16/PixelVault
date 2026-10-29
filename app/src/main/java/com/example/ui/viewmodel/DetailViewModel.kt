@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 data class DetailUiState(
@@ -31,16 +32,43 @@ class DetailViewModel(
 
     private val _uiState = MutableStateFlow(DetailUiState())
     val uiState: StateFlow<DetailUiState> = _uiState.asStateFlow()
+    private var activeImageId = ""
+    private var imageRequestJob: Job? = null
 
     fun setMetadata(metadata: ImageMetadata) {
-        _uiState.update { it.copy(metadata = metadata) }
-        fetchImageBytes(metadata.effectiveId)
+        val id = metadata.effectiveId
+        val changedImage = id != activeImageId
+        _uiState.update {
+            it.copy(
+                metadata = metadata,
+                imageBytes = if (changedImage) null else it.imageBytes,
+                isLoadingBytes = changedImage,
+                errorMessage = if (changedImage) null else it.errorMessage
+            )
+        }
+        if (changedImage || (_uiState.value.imageBytes == null && !id.isBlank())) {
+            fetchImageBytes(id)
+        }
     }
 
-    fun fetchImageBytes(id: String) {
+    fun fetchImageBytes(id: String, forceRefresh: Boolean = false) {
         if (id.isBlank()) return
-        viewModelScope.launch {
+        if (!forceRefresh && activeImageId == id && imageRequestJob?.isActive == true) return
+        if (!forceRefresh && activeImageId == id && _uiState.value.imageBytes != null) return
+
+        val changedImage = activeImageId != id
+        activeImageId = id
+        imageRequestJob?.cancel()
+        _uiState.update {
+            it.copy(
+                imageBytes = if (changedImage) null else it.imageBytes,
+                isLoadingBytes = true,
+                errorMessage = null
+            )
+        }
+        imageRequestJob = viewModelScope.launch {
             imageRepository.getImageBytes(id).collect { resource ->
+                if (activeImageId != id) return@collect
                 when (resource) {
                     is Resource.Loading -> _uiState.update { it.copy(isLoadingBytes = true, errorMessage = null) }
                     is Resource.Success -> {
@@ -56,6 +84,7 @@ class DetailViewModel(
                         _uiState.update {
                             it.copy(
                                 isLoadingBytes = false,
+                                imageBytes = if (changedImage) null else it.imageBytes,
                                 errorMessage = resource.message
                             )
                         }
@@ -74,8 +103,9 @@ class DetailViewModel(
         }
 
         _uiState.update { it.copy(isDownloading = true, errorMessage = null, infoMessage = null) }
-        val filename = metadata.filename ?: "download_${metadata.effectiveId}.${metadata.format?.lowercase() ?: "jpg"}"
-        val mime = metadata.mimetype ?: "image/jpeg"
+        val filename = metadata.effectiveFilename
+            ?: "download_${metadata.effectiveId}.${metadata.format?.lowercase() ?: "jpg"}"
+        val mime = metadata.effectiveMimeType ?: "image/jpeg"
 
         val result = imageRepository.saveToDownloads(context, bytes, filename, mime)
         result.onSuccess { uri ->

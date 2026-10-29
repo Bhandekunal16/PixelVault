@@ -77,7 +77,7 @@ fun ImagesListScreen(
     var showDeleteConfirmation by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        viewModel.loadImages(isRefresh = false)
+        viewModel.syncIfStale()
     }
 
     if (showDeleteConfirmation) {
@@ -95,7 +95,7 @@ fun ImagesListScreen(
 
     PullToRefreshBox(
         isRefreshing = uiState.isRefreshing,
-        onRefresh = { viewModel.loadImages(isRefresh = true) },
+        onRefresh = { viewModel.refreshImages() },
         modifier = Modifier
             .fillMaxSize()
             .testTag("images_list_screen")
@@ -185,8 +185,9 @@ fun ImagesListScreen(
                         IconButton(
                             onClick = {
                                 haptic.click()
-                                viewModel.loadImages(isRefresh = true)
+                                viewModel.refreshImages()
                             },
+                            enabled = !uiState.isSyncing,
                             modifier = Modifier.testTag("refresh_images_button")
                         ) {
                             Icon(
@@ -204,8 +205,16 @@ fun ImagesListScreen(
             if (uiState.errorMessage != null) {
                 StatusBanner(
                     message = uiState.errorMessage!!,
-                    isError = true,
-                    onDismiss = { viewModel.loadImages(isRefresh = true) }
+                    isError = true
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+
+            if (uiState.syncErrorMessage != null) {
+                StatusBanner(
+                    message = "Showing saved images. Sync failed: ${uiState.syncErrorMessage}",
+                    isWarning = true,
+                    onDismiss = { viewModel.clearSyncError() }
                 )
                 Spacer(modifier = Modifier.height(10.dp))
             }
@@ -219,7 +228,7 @@ fun ImagesListScreen(
                 Spacer(modifier = Modifier.height(10.dp))
             }
 
-            if (uiState.isLoading && uiState.images.isEmpty()) {
+            if ((uiState.isLoading || uiState.isSyncing) && uiState.images.isEmpty()) {
                 FullScreenLoading(text = "Loading your images...")
             } else if (uiState.images.isEmpty()) {
                 val displayEmail = EmailUtils.formatDisplayGmail(uiState.userEmail, fallback = "your account")
@@ -241,7 +250,7 @@ fun ImagesListScreen(
                 ) {
                     items(
                         items = uiState.images,
-                        key = { it.effectiveId.ifBlank { it.filename ?: it.hashCode().toString() } }
+                        key = { it.effectiveId.ifBlank { it.effectiveFilename ?: it.hashCode().toString() } }
                     ) { image ->
                         ImageListItemCard(
                             image = image,
@@ -329,7 +338,7 @@ fun ImageListItemCard(
                         .data(imageUrl)
                         .crossfade(true)
                         .build(),
-                    contentDescription = image.filename,
+                    contentDescription = image.effectiveFilename,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -340,7 +349,7 @@ fun ImageListItemCard(
             // Details
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = image.filename ?: "image_${image.effectiveId}",
+                    text = image.effectiveFilename ?: "image_${image.effectiveId}",
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
