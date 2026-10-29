@@ -72,7 +72,7 @@ import com.example.util.FileUtils
 @Composable
 fun UploadScreen(
     viewModel: UploadViewModel,
-    onUploadSuccessRefresh: () -> Unit
+    onUploadSuccess: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -170,7 +170,6 @@ fun UploadScreen(
                         OutlinedButton(
                             onClick = {
                                 viewModel.reset()
-                                onUploadSuccessRefresh()
                             },
                             shape = RoundedCornerShape(10.dp),
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
@@ -429,7 +428,7 @@ fun UploadScreen(
                 haptic.click()
                 viewModel.upload(context) {
                     haptic.success()
-                    onUploadSuccessRefresh()
+                    onUploadSuccess()
                 }
             },
             enabled = uiState.selectedUri != null && !uiState.isUploading && uiState.email.isNotBlank(),

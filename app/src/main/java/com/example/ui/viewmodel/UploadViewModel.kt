@@ -93,6 +93,8 @@ class UploadViewModel(
             return
         }
 
+        _uiState.update { it.copy(isUploading = true, errorMessage = null) }
+
         viewModelScope.launch {
             imageRepository.uploadImage(
                 context = context,
