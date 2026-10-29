@@ -2,6 +2,7 @@ package com.example.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.local.StorageUsageEntity
 import com.example.data.model.ImageMetadata
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.ImageRepository
@@ -23,6 +24,9 @@ data class DashboardUiState(
     val recentImages: List<ImageMetadata> = emptyList(),
     val totalOriginalBytes: Long = 0L,
     val totalStoredBytes: Long = 0L,
+    val storageUsage: StorageUsageEntity? = null,
+    val isUsageRefreshing: Boolean = false,
+    val storageUsageErrorMessage: String? = null,
     val isLoading: Boolean = false,
     val isSyncing: Boolean = false,
     val errorMessage: String? = null
@@ -45,7 +49,9 @@ class DashboardViewModel(
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
     private var activeAccount = ""
     private var imagesObservationJob: Job? = null
+    private var usageObservationJob: Job? = null
     private var syncJob: Job? = null
+    private var usageRefreshJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -69,7 +75,9 @@ class DashboardViewModel(
         if (activeAccount == account) return
         activeAccount = account
         imagesObservationJob?.cancel()
+        usageObservationJob?.cancel()
         syncJob?.cancel()
+        usageRefreshJob?.cancel()
 
         if (account.isBlank()) {
             _uiState.value = DashboardUiState()
@@ -81,6 +89,12 @@ class DashboardViewModel(
             imageRepository.observeImages(account).collect { images ->
                 if (activeAccount != account) return@collect
                 updateImages(images)
+            }
+        }
+        usageObservationJob = viewModelScope.launch {
+            imageRepository.observeStorageUsage(account).collect { usage ->
+                if (activeAccount != account) return@collect
+                _uiState.update { it.copy(storageUsage = usage) }
             }
         }
     }
@@ -108,10 +122,34 @@ class DashboardViewModel(
 
     fun syncDashboardIfStale() {
         synchronizeDashboard(forceRefresh = false)
+        synchronizeStorageUsage(forceRefresh = false)
     }
 
     fun refreshDashboardData() {
         synchronizeDashboard(forceRefresh = true)
+        synchronizeStorageUsage(forceRefresh = true)
+    }
+
+    fun refreshStorageUsageIfStale() {
+        synchronizeStorageUsage(forceRefresh = false)
+    }
+
+    private fun synchronizeStorageUsage(forceRefresh: Boolean) {
+        val account = activeAccount
+        if (account.isBlank() || _uiState.value.isUsageRefreshing) return
+        usageRefreshJob = viewModelScope.launch {
+            _uiState.update {
+                it.copy(isUsageRefreshing = true, storageUsageErrorMessage = null)
+            }
+            val result = imageRepository.refreshStorageUsage(account, forceRefresh)
+            if (activeAccount != account) return@launch
+            _uiState.update {
+                it.copy(
+                    isUsageRefreshing = false,
+                    storageUsageErrorMessage = (result as? Resource.Error)?.message
+                )
+            }
+        }
     }
 
     private fun synchronizeDashboard(forceRefresh: Boolean) {

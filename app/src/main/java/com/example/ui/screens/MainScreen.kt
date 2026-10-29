@@ -231,7 +231,8 @@ fun MainScreen(
                                     duration = SnackbarDuration.Short
                                 )
                             }
-                        }
+                        },
+                        onNavigateToImages = { currentTab = BottomNavTab.Images.route }
                     )
                 }
                 BottomNavTab.Images.route -> {

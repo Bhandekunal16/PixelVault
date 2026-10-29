@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.data.api.NetworkClient
 import com.example.data.local.ImageDatabase
 import com.example.data.local.ImageEntity
+import com.example.data.local.StorageUsageEntity
 import com.example.data.preferences.AppPreferences
 import com.example.data.preferences.TokenCipher
 import com.example.data.repository.ImageRepositoryImpl
@@ -473,6 +474,61 @@ class ImageRepositorySyncTest {
             listOf("other-cached"),
             database.imageDao().observeImages("other@gmail.com").first().map(ImageEntity::serverId)
         )
+    }
+
+    @Test
+    fun `storage usage refresh persists validated account scoped summary`() = runBlocking {
+        val server = server(
+            200,
+            """{"message":"Storage usage retrieved successfully","statusCode":200,"status":true,"data":{"usedBytes":80,"quotaBytes":100,"availableBytes":20,"usagePercentage":80,"imageCount":3,"warningLevel":"info"}}""",
+            expectedMethods = listOf("GET")
+        )
+        val repository = repository(server)
+
+        val result = repository.refreshStorageUsage("person@gmail.com", forceRefresh = true)
+        server.awaitRequest()
+
+        assertTrue(result is Resource.Success)
+        val savedUsage = database.imageDao().getStorageUsage("person@gmail.com")!!
+        assertEquals(80L, savedUsage.usedBytes)
+        assertEquals(100L, savedUsage.quotaBytes)
+        assertEquals(20L, savedUsage.availableBytes)
+        assertEquals(80, savedUsage.usagePercentage)
+        assertEquals(3, savedUsage.imageCount)
+        assertEquals("info", savedUsage.warningLevel)
+        assertTrue(savedUsage.fetchedAt > 0L)
+        assertEquals(1, server.requestCount.get())
+    }
+
+    @Test
+    fun `failed storage usage refresh retains last confirmed account summary`() = runBlocking {
+        database.imageDao().upsertStorageUsage(
+            StorageUsageEntity(
+                accountScope = "person@gmail.com",
+                usedBytes = 60,
+                quotaBytes = 100,
+                availableBytes = 40,
+                usagePercentage = 60,
+                imageCount = 2,
+                warningLevel = "normal",
+                fetchedAt = 1234L
+            )
+        )
+        val server = server(
+            503,
+            """{"message":"Service unavailable","statusCode":503,"status":false,"data":{"errorCode":"STORAGE_USAGE_UNAVAILABLE"}}""",
+            expectedMethods = listOf("GET")
+        )
+
+        val result = repository(server).refreshStorageUsage("person@gmail.com", forceRefresh = true)
+        server.awaitRequest()
+
+        assertTrue(result is Resource.Error)
+        val retained = database.imageDao().getStorageUsage("person@gmail.com")!!
+        assertEquals(60L, retained.usedBytes)
+        assertEquals(1234L, retained.fetchedAt)
+        assertTrue(!retained.lastSyncError.isNullOrBlank())
+        assertTrue(database.imageDao().observeStorageUsage("other@gmail.com").first() == null)
     }
 
     private suspend fun repository(server: SingleResponseServer): ImageRepositoryImpl {

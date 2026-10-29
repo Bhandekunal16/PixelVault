@@ -17,7 +17,27 @@ object NetworkErrorHandler {
         } catch (e: Exception) {
             null
         }
+        return parseErrorMessage(code, errorBody)
+    }
 
+    fun parseErrorDetails(response: Response<*>): ApiErrorDetails {
+        val errorBody = try {
+            response.errorBody()?.string()
+        } catch (e: Exception) {
+            null
+        }
+        val errorCode = try {
+            errorBody?.let { org.json.JSONObject(it).optJSONObject("data")?.optString("errorCode") }
+        } catch (e: org.json.JSONException) {
+            null
+        }?.takeIf(String::isNotBlank)
+        return ApiErrorDetails(
+            message = parseErrorMessage(response.code(), errorBody),
+            errorCode = errorCode
+        )
+    }
+
+    private fun parseErrorMessage(code: Int, errorBody: String?): String {
         // Extract user-friendly message from JSON
         var serverMessage: String? = null
         if (!errorBody.isNullOrBlank()) {
@@ -48,4 +68,9 @@ object NetworkErrorHandler {
             else -> "An unexpected error occurred. Please try again."
         }
     }
+
+    data class ApiErrorDetails(
+        val message: String,
+        val errorCode: String?
+    )
 }

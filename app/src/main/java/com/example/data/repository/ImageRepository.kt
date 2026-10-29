@@ -10,9 +10,11 @@ import com.example.data.local.ImageDao
 import com.example.data.local.ImageDatabase
 import com.example.data.local.ImageEntity
 import com.example.data.local.ImageSyncStateEntity
+import com.example.data.local.StorageUsageEntity
 import com.example.data.local.toEntity
 import com.example.data.model.ImageMetadata
 import com.example.data.model.OutputFormat
+import com.example.data.model.StorageUsage
 import com.example.data.preferences.AppPreferences
 import com.example.util.FileUtils
 import com.example.util.Resource
@@ -42,6 +44,13 @@ interface ImageRepository {
     fun observeImages(email: String): Flow<List<ImageMetadata>>
 
     fun observeSyncState(email: String): Flow<ImageSyncStateEntity?>
+
+    fun observeStorageUsage(email: String): Flow<StorageUsageEntity?>
+
+    suspend fun refreshStorageUsage(
+        email: String,
+        forceRefresh: Boolean = false
+    ): Resource<StorageUsage>
 
     suspend fun synchronizeImages(email: String, forceRefresh: Boolean = false): Resource<Unit>
 
@@ -75,6 +84,61 @@ class ImageRepositoryImpl(
 
     override fun observeSyncState(email: String): Flow<ImageSyncStateEntity?> =
         imageDao.observeSyncState(normalizeAccount(email))
+
+    override fun observeStorageUsage(email: String): Flow<StorageUsageEntity?> =
+        imageDao.observeStorageUsage(normalizeAccount(email))
+
+    override suspend fun refreshStorageUsage(
+        email: String,
+        forceRefresh: Boolean
+    ): Resource<StorageUsage> {
+        val account = normalizeAccount(email)
+        if (account.isBlank())
+            return Resource.Error("A signed-in account is required to load storage usage.")
+
+        return accountLock(account).withLock {
+            val previous = imageDao.getStorageUsage(account)
+            val now = System.currentTimeMillis()
+            if (
+                !forceRefresh &&
+                previous != null &&
+                previous.lastSyncError == null &&
+                now - previous.fetchedAt < SYNC_FRESHNESS_MILLIS
+            )
+                return@withLock Resource.Success(previous.toStorageUsage())
+
+            try {
+                val authorization = authorizationForAccount(account)
+                val response = apiService().getStorageUsage(authorization)
+                if (!response.isSuccessful) {
+                    val details = NetworkErrorHandler.parseErrorDetails(response)
+                    persistStorageUsageError(account, previous, details.message)
+                    return@withLock Resource.Error(
+                        details.message,
+                        statusCode = response.code(),
+                        errorCode = details.errorCode
+                    )
+                }
+
+                val usage = response.body()?.data
+                    ?: throw IllegalStateException("The server returned no storage usage data.")
+                validateStorageUsage(usage)
+                val entity = usage.toEntity(account, now)
+                imageDao.upsertStorageUsage(entity)
+                Resource.Success(usage)
+            } catch (e: AuthSessionException) {
+                val message = e.message ?: "Please sign in again."
+                persistStorageUsageError(account, previous, message)
+                Resource.Error(message, e, 401)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val message = NetworkErrorHandler.parseException(e)
+                persistStorageUsageError(account, previous, message)
+                Resource.Error(message, e)
+            }
+        }
+    }
 
     override suspend fun synchronizeImages(
         email: String,
@@ -130,6 +194,7 @@ class ImageRepositoryImpl(
         email: String,
         format: OutputFormat
     ): Flow<Resource<ImageMetadata>> = flow {
+        var refreshUsage = false
         emit(Resource.Loading)
         val account = normalizeAccount(email)
         if (account.isBlank()) {
@@ -160,7 +225,14 @@ class ImageRepositoryImpl(
                 )
 
                 if (!response.isSuccessful) {
-                    emit(Resource.Error(NetworkErrorHandler.parseError(response), statusCode = response.code()))
+                    val details = NetworkErrorHandler.parseErrorDetails(response)
+                    emit(
+                        Resource.Error(
+                            details.message,
+                            statusCode = response.code(),
+                            errorCode = details.errorCode
+                        )
+                    )
                     return@withLock
                 }
 
@@ -177,6 +249,7 @@ class ImageRepositoryImpl(
                     return@withLock
                 }
                 imageDao.upsertImages(listOf(entity))
+                refreshUsage = true
                 emit(Resource.Success(metadata))
             } catch (e: AuthSessionException) {
                 emit(Resource.Error(e.message ?: "Please sign in again.", e, 401))
@@ -191,6 +264,7 @@ class ImageRepositoryImpl(
                 emit(Resource.Error(message, e))
             }
         }
+        if (refreshUsage) refreshStorageUsage(account, forceRefresh = true)
     }.flowOn(Dispatchers.IO)
 
     override fun getImageBytes(id: String, email: String): Flow<Resource<ByteArray>> = flow {
@@ -237,6 +311,7 @@ class ImageRepositoryImpl(
     }
 
     override fun deleteImages(ids: List<String>, email: String): Flow<Resource<Int>> = flow {
+        var refreshUsage = false
         emit(Resource.Loading)
         val validIds = ids.filter(String::isNotBlank).distinct()
         if (validIds.isEmpty()) {
@@ -261,6 +336,7 @@ class ImageRepositoryImpl(
                 if (!response.isSuccessful) {
                     if (response.code() == 404 && isImageNotFound(response.errorBody()?.string())) {
                         imageDao.deleteImages(account, validIds)
+                        refreshUsage = true
                         emit(Resource.Success(0))
                     } else {
                         emit(Resource.Error(NetworkErrorHandler.parseError(response), statusCode = response.code()))
@@ -276,6 +352,7 @@ class ImageRepositoryImpl(
 
                 if (deletedCount == validIds.size) {
                     imageDao.deleteImages(account, validIds)
+                    refreshUsage = true
                 } else {
                     val remainingRemoteImages = fetchServerImages(api, authorization)
                     val remainingIds = remainingRemoteImages.mapTo(HashSet()) { it.effectiveId }
@@ -299,6 +376,7 @@ class ImageRepositoryImpl(
                         emit(Resource.Error("Some selected images could not be deleted."))
                         return@withLock
                     }
+                    refreshUsage = true
                 }
                 emit(Resource.Success(deletedCount))
             } catch (e: AuthSessionException) {
@@ -311,6 +389,7 @@ class ImageRepositoryImpl(
                 emit(Resource.Error(NetworkErrorHandler.parseException(e), e))
             }
         }
+        if (refreshUsage) refreshStorageUsage(account, forceRefresh = true)
     }.flowOn(Dispatchers.IO)
 
     override fun checkServerHealth(): Flow<Resource<Boolean>> = flow {
@@ -381,6 +460,29 @@ class ImageRepositoryImpl(
         return networkClient.getApiService(baseUrl)
     }
 
+    private suspend fun persistStorageUsageError(
+        account: String,
+        previous: StorageUsageEntity?,
+        message: String
+    ) {
+        if (previous != null) {
+            imageDao.upsertStorageUsage(previous.copy(lastSyncError = message))
+        }
+    }
+
+    private fun validateStorageUsage(usage: StorageUsage) {
+        if (
+            usage.usedBytes < 0 ||
+            usage.quotaBytes <= 0 ||
+            usage.availableBytes != (usage.quotaBytes - usage.usedBytes).coerceAtLeast(0) ||
+            usage.usagePercentage !in 0..100 ||
+            usage.imageCount < 0 ||
+            usage.warningLevel !in setOf("normal", "info", "warning", "full")
+        ) {
+            throw IllegalStateException("The server returned invalid storage usage values.")
+        }
+    }
+
     private suspend fun authorizationForAccount(account: String): String {
         val currentAccount = normalizeAccount(preferences.userEmailFlow.first().orEmpty())
         val accessToken = preferences.accessTokenFlow.first()
@@ -392,6 +494,7 @@ class ImageRepositoryImpl(
         ) {
             throw AuthSessionException("Your session is unavailable or has expired. Please sign in again.")
         }
+
         return "Bearer $accessToken"
     }
 

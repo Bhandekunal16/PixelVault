@@ -45,4 +45,13 @@ abstract class ImageDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     abstract suspend fun upsertSyncState(syncState: ImageSyncStateEntity)
+
+    @Query("SELECT * FROM storage_usage WHERE accountScope = :accountScope")
+    abstract fun observeStorageUsage(accountScope: String): Flow<StorageUsageEntity?>
+
+    @Query("SELECT * FROM storage_usage WHERE accountScope = :accountScope")
+    abstract suspend fun getStorageUsage(accountScope: String): StorageUsageEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    abstract suspend fun upsertStorageUsage(usage: StorageUsageEntity)
 }

@@ -13,7 +13,7 @@ import java.net.ConnectException
 import java.net.SocketTimeoutException
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [35])
 class NetworkErrorHandlerTest {
 
     @Test
@@ -44,6 +44,20 @@ class NetworkErrorHandlerTest {
         )
         val message = NetworkErrorHandler.parseError(responseWithCustomMsg)
         assertTrue(message.contains("Database indexing failed"))
+    }
+
+    @Test
+    fun `quota conflict preserves the structured storage quota error code`() {
+        val response = Response.error<Any>(
+            409,
+            """{"message":"Account cloud storage quota exceeded","data":{"errorCode":"STORAGE_QUOTA_EXCEEDED"}}"""
+                .toResponseBody("application/json".toMediaTypeOrNull())
+        )
+
+        val details = NetworkErrorHandler.parseErrorDetails(response)
+
+        assertTrue(details.message.contains("quota exceeded", ignoreCase = true))
+        org.junit.Assert.assertEquals("STORAGE_QUOTA_EXCEEDED", details.errorCode)
     }
 
     @Test

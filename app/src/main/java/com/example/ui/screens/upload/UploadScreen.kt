@@ -44,6 +44,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -61,6 +62,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.data.model.OutputFormat
 import com.example.ui.components.StatusBanner
+import com.example.ui.components.StorageUsageCard
 import com.example.ui.theme.SuccessGreen
 import com.example.ui.theme.SuccessGreenContainerDark
 import com.example.ui.theme.SuccessGreenContainerLight
@@ -72,7 +74,8 @@ import com.example.util.FileUtils
 @Composable
 fun UploadScreen(
     viewModel: UploadViewModel,
-    onUploadSuccess: () -> Unit
+    onUploadSuccess: () -> Unit,
+    onNavigateToImages: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -80,6 +83,10 @@ fun UploadScreen(
     val scrollState = rememberScrollState()
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+
+    LaunchedEffect(uiState.email) {
+        viewModel.refreshStorageUsageIfStale()
+    }
 
     // Android zero-permission Photo Picker
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -116,6 +123,28 @@ fun UploadScreen(
             )
             Spacer(modifier = Modifier.height(16.dp))
         }
+
+        StorageUsageCard(
+            usage = uiState.storageUsage,
+            isRefreshing = uiState.isUsageRefreshing,
+            errorMessage = uiState.storageUsageErrorMessage,
+            onRefresh = viewModel::refreshStorageUsageIfStale
+        )
+
+        if (uiState.errorCode == "STORAGE_QUOTA_EXCEEDED") {
+            OutlinedButton(
+                onClick = onNavigateToImages,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+                    .testTag("manage_storage_images_button"),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text("Manage images")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Solid Success Card if uploaded
         if (uiState.uploadedMetadata != null) {

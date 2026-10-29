@@ -7,6 +7,7 @@ import com.example.data.model.LoginData
 import com.example.data.model.LoginRequest
 import com.example.data.model.RegisterData
 import com.example.data.model.RegisterRequest
+import com.example.data.model.StorageUsage
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import okhttp3.ResponseBody
@@ -67,6 +68,11 @@ interface ApiService {
     suspend fun getImages(
         @Header("Authorization") authorization: String
     ): Response<ApiResponse<List<ImageMetadata>>>
+
+    @GET("/storage/usage")
+    suspend fun getStorageUsage(
+        @Header("Authorization") authorization: String
+    ): Response<ApiResponse<StorageUsage>>
 
     /**
      * Retrieve original stored image bytes as binary data.

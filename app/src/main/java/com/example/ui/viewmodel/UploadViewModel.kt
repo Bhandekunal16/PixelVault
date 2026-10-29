@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.local.StorageUsageEntity
 import com.example.data.model.ImageMetadata
 import com.example.data.model.OutputFormat
 import com.example.data.repository.AuthRepository
@@ -14,8 +15,10 @@ import com.example.util.ValidationUtil
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 data class UploadUiState(
     val selectedUri: Uri? = null,
@@ -24,8 +27,12 @@ data class UploadUiState(
     val email: String = "",
     val selectedFormat: OutputFormat = OutputFormat.WEBP,
     val isUploading: Boolean = false,
+    val storageUsage: StorageUsageEntity? = null,
+    val isUsageRefreshing: Boolean = false,
+    val storageUsageErrorMessage: String? = null,
     val uploadedMetadata: ImageMetadata? = null,
     val errorMessage: String? = null,
+    val errorCode: String? = null,
     val emailError: String? = null
 )
 
@@ -36,13 +43,51 @@ class UploadViewModel(
 
     private val _uiState = MutableStateFlow(UploadUiState())
     val uiState: StateFlow<UploadUiState> = _uiState.asStateFlow()
+    private var activeAccount = ""
+    private var usageObservationJob: kotlinx.coroutines.Job? = null
+    private var usageRefreshJob: kotlinx.coroutines.Job? = null
 
     init {
         viewModelScope.launch {
-            authRepository.getCurrentUserEmail().collect { email ->
-                if (email != null) {
-                    _uiState.update { it.copy(email = email) }
+            authRepository.getCurrentUserEmail().collectLatest { email ->
+                val account = email.orEmpty().trim().lowercase(Locale.ROOT)
+                activeAccount = account
+                usageObservationJob?.cancel()
+                usageRefreshJob?.cancel()
+                _uiState.update {
+                    it.copy(
+                        email = account,
+                        storageUsage = null,
+                        isUsageRefreshing = false,
+                        storageUsageErrorMessage = null
+                    )
                 }
+                if (account.isNotBlank()) {
+                    usageObservationJob = viewModelScope.launch {
+                        imageRepository.observeStorageUsage(account).collect { usage ->
+                            if (activeAccount == account)
+                                _uiState.update { it.copy(storageUsage = usage) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun refreshStorageUsageIfStale() {
+        val account = activeAccount
+        if (account.isBlank() || _uiState.value.isUsageRefreshing) return
+        usageRefreshJob = viewModelScope.launch {
+            _uiState.update {
+                it.copy(isUsageRefreshing = true, storageUsageErrorMessage = null)
+            }
+            val result = imageRepository.refreshStorageUsage(account, forceRefresh = false)
+            if (activeAccount != account) return@launch
+            _uiState.update {
+                it.copy(
+                    isUsageRefreshing = false,
+                    storageUsageErrorMessage = (result as? Resource.Error)?.message
+                )
             }
         }
     }
@@ -61,7 +106,8 @@ class UploadViewModel(
                 filename = name,
                 fileSizeBytes = size,
                 uploadedMetadata = null,
-                errorMessage = error
+                errorMessage = error,
+                errorCode = null
             )
         }
     }
@@ -93,7 +139,9 @@ class UploadViewModel(
             return
         }
 
-        _uiState.update { it.copy(isUploading = true, errorMessage = null) }
+        _uiState.update {
+            it.copy(isUploading = true, errorMessage = null, errorCode = null)
+        }
 
         viewModelScope.launch {
             imageRepository.uploadImage(
@@ -109,7 +157,8 @@ class UploadViewModel(
                             it.copy(
                                 isUploading = false,
                                 uploadedMetadata = resource.data,
-                                errorMessage = null
+                                errorMessage = null,
+                                errorCode = null
                             )
                         }
                         onSuccess()
@@ -118,7 +167,8 @@ class UploadViewModel(
                         _uiState.update {
                             it.copy(
                                 isUploading = false,
-                                errorMessage = resource.message
+                                errorMessage = resource.message,
+                                errorCode = resource.errorCode
                             )
                         }
                     }
@@ -134,7 +184,8 @@ class UploadViewModel(
                 filename = "",
                 fileSizeBytes = 0L,
                 uploadedMetadata = null,
-                errorMessage = null
+                errorMessage = null,
+                errorCode = null
             )
         }
     }

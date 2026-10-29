@@ -28,6 +28,7 @@ The application interfaces directly with the following backend routes:
 | `POST` | `/register` | User registration (Gmail only, 8+ char password) | `{"email": "person@gmail.com", "password": "..."}` |
 | `POST` | `/login` | User authentication; returns an access token | `{"email": "person@gmail.com", "password": "..."}` |
 | `POST` | `/image` | Authenticated upload & format conversion (max 10 MiB) | `multipart/form-data` (`image`, optional matching `email`, `format`) |
+| `GET` | `/storage/usage` | Retrieve authenticated account cloud storage usage and quota | Bearer token |
 | `GET` | `/image` | Retrieve metadata list for the authenticated user | Bearer token |
 | `GET` | `/image?id={id}` | Retrieve an owned image's raw bytes | Bearer token; streams binary image |
 | `DELETE` | `/image` | Delete 1 to 100 owned images by ID | Bearer token and `{"ids": ["mongo-id-1", "mongo-id-2"]}` |
@@ -36,11 +37,13 @@ Image API calls use the `Authorization: Bearer <accessToken>` header. Login retu
 
 ## 3. Local-First Image Behavior
 
+> Phase 4 note: The earlier API overview sentence stating that storage usage is not exposed is outdated. The authenticated `GET /storage/usage` endpoint now provides server-calculated usage and quota information.
+
 - My Images and the dashboard observe image metadata from the Room database, so previously cached records can be displayed before a network sync completes.
 - A successful list sync replaces the cached records for that normalized email account in one transaction. Other account caches are kept separate. Automatic list sync is considered fresh for two minutes; an explicit refresh bypasses that window.
 - Uploads and deletions remain online-only. Confirmed uploads are written to Room; successful or already-absent deletions remove the corresponding local records. The app does not queue mutations for later or automatically retry an upload with an uncertain network outcome.
-- The backend currently has no image-update endpoint. Its existing per-email usage aggregation is internal only; the app does not show fabricated usage or enforce a quota.
-- Room records are partitioned by normalized account email and scoped repository calls require the matching active session. The backend separately validates bearer tokens and scopes image access/deletion by stable user ID, with an email fallback only for legacy records without an owner ID.
+- The backend currently has no image-update endpoint. Cloud storage usage and quota enforcement are server-side; the app caches the last confirmed usage summary in Room, scoped to the account, and labels cached information when it may be stale.
+- Room image and storage-usage records are partitioned by normalized account email and scoped repository calls require the matching active session. The backend separately validates bearer tokens and scopes image access/deletion by stable user ID, with an email fallback only for legacy records without an owner ID.
 - Metadata is persisted in Room; image bytes are fetched from the authenticated backend when needed. Coil provides its configured image memory/disk cache. Uploads and deletions are online-only; there is no durable mutation queue.
 
 ---
@@ -141,4 +144,4 @@ The APK will be generated at:
 - Deploy the backend behind a trusted HTTPS terminator and do not expose backend ports directly to the public internet. The Android client allows cleartext only for localhost, loopback, and the standard emulator host for development.
 - Legacy image records without `ownerId` are served only when their stored email matches the authenticated account. Newly uploaded records use the stable user ID from the token.
 - Account-scoped Room metadata remains on device after logout; logout clears credentials, not cached image metadata. Shared-device threat models may require explicit cache deletion on logout.
-- Image update APIs, server-side logout/revocation, refresh tokens, offline mutation queues, and public quota/usage endpoints are not implemented.
+- Image update APIs, server-side logout/revocation, refresh tokens, and offline mutation queues are not implemented.

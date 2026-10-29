@@ -59,6 +59,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.data.model.ImageMetadata
 import com.example.ui.components.EmptyStateCard
+import com.example.ui.components.StorageUsageCard
 import com.example.ui.components.StatusBanner
 import com.example.ui.viewmodel.DashboardViewModel
 import com.example.util.EmailUtils
@@ -78,7 +79,7 @@ fun HomeScreen(
     val scrollState = rememberScrollState()
     val haptic = rememberHapticHelper()
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(uiState.userEmail) {
         viewModel.syncDashboardIfStale()
     }
 
@@ -149,6 +150,15 @@ fun HomeScreen(
             )
             Spacer(modifier = Modifier.height(16.dp))
         }
+
+        StorageUsageCard(
+            usage = uiState.storageUsage,
+            isRefreshing = uiState.isUsageRefreshing,
+            errorMessage = uiState.storageUsageErrorMessage,
+            onRefresh = viewModel::refreshStorageUsageIfStale
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Stats Overview Card with Solid Surface and Crisp Border
         Card(
