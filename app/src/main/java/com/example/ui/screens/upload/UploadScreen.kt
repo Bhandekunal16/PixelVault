@@ -36,8 +36,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -68,8 +69,12 @@ import coil.request.ImageRequest
 import com.example.data.model.OutputFormat
 import com.example.data.local.QueuedUploadEntity
 import com.example.data.local.UploadQueueStatus
+import com.example.ui.components.SettingsSectionHeader
+import com.example.ui.components.SingleChoiceSegmentedControl
+import com.example.ui.components.SegmentedOption
 import com.example.ui.components.StatusBanner
 import com.example.ui.components.StorageUsageCard
+import com.example.ui.theme.AppDimens
 import com.example.ui.theme.SuccessGreen
 import com.example.ui.theme.SuccessGreenContainerDark
 import com.example.ui.theme.SuccessGreenContainerLight
@@ -91,6 +96,7 @@ fun UploadScreen(
     val context = LocalContext.current
     val haptic = rememberHapticHelper()
     val scrollState = rememberScrollState()
+    var queueSectionExpanded by remember { mutableStateOf(true) }
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
@@ -151,37 +157,56 @@ fun UploadScreen(
         )
 
         if (uiState.queuedUploads.isNotEmpty()) {
-            Text(
-                text = "Upload queue (${uiState.pendingUploadCount} pending)",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            uiState.queuedUploads.forEach { upload ->
-                QueuedUploadCard(
-                    upload = upload,
-                    isActionRunning = upload.operationId in uiState.queueActionIds,
-                    onRetry = { viewModel.retryQueuedUpload(upload.operationId) },
-                    onCancel = { viewModel.cancelQueuedUpload(upload.operationId) },
-                    onRemove = { viewModel.removeQueuedUpload(upload.operationId) },
-                    onManageStorage = onNavigateToImages
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SettingsSectionHeader(
+                    title = "Upload queue",
+                    subtitle = "${uiState.pendingUploadCount} pending",
+                    modifier = Modifier.weight(1f)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                IconButton(onClick = { queueSectionExpanded = !queueSectionExpanded }) {
+                    Icon(
+                        imageVector = if (queueSectionExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (queueSectionExpanded) "Collapse queue" else "Expand queue"
+                    )
+                }
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            if (queueSectionExpanded) {
+                Spacer(modifier = Modifier.height(8.dp))
+                uiState.queuedUploads.forEach { upload ->
+                    QueuedUploadCard(
+                        upload = upload,
+                        isActionRunning = upload.operationId in uiState.queueActionIds,
+                        onRetry = { viewModel.retryQueuedUpload(upload.operationId) },
+                        onCancel = { viewModel.cancelQueuedUpload(upload.operationId) },
+                        onRemove = { viewModel.removeQueuedUpload(upload.operationId) },
+                        onManageStorage = onNavigateToImages
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+            Spacer(modifier = Modifier.height(AppDimens.sectionSpacing))
         }
+
+        SettingsSectionHeader(
+            title = "Select image",
+            subtitle = "Choose a photo from your device (max 10 MiB)"
+        )
+        Spacer(modifier = Modifier.height(10.dp))
 
         if (uiState.errorCode == "STORAGE_QUOTA_EXCEEDED") {
             OutlinedButton(
                 onClick = onNavigateToImages,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp)
                     .testTag("manage_storage_images_button"),
                 shape = RoundedCornerShape(10.dp)
             ) {
                 Text("Manage images")
             }
+            Spacer(modifier = Modifier.height(12.dp))
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -365,165 +390,139 @@ fun UploadScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Target Output Format Selector
-        Text(
-            text = "Convert to Format",
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Text(
-            text = "Select destination image format:",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        if (uiState.selectedUri != null) {
+            SettingsSectionHeader(
+                title = "Conversion",
+                subtitle = "Output format for optimization"
+            )
+            Spacer(modifier = Modifier.height(10.dp))
 
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            OutputFormat.entries.forEach { format ->
-                val isSelected = uiState.selectedFormat == format
-                FilterChip(
-                    selected = isSelected,
-                    onClick = {
-                        if (uiState.selectedFormat != format) {
-                            haptic.tick()
-                        }
-                        viewModel.onFormatSelected(format)
-                    },
-                    label = { Text(format.label, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    modifier = Modifier.testTag("format_chip_${format.apiValue}")
+            val formatOptions = OutputFormat.entries.map { format ->
+                SegmentedOption(
+                    value = format,
+                    label = format.label,
+                    testTag = "format_chip_${format.apiValue}"
                 )
             }
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = uiState.selectedFormat.description,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Read-Only Associated Gmail Account
-        Text(
-            text = "Associated Gmail Account (Read-Only)",
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onBackground
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        val displayEmail = EmailUtils.formatDisplayGmail(uiState.email, fallback = "Authenticated Account")
-
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("upload_email_input"),
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Email,
-                    contentDescription = "Authenticated Gmail",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(22.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Authenticated Gmail",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = displayEmail,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+            SingleChoiceSegmentedControl(
+                options = formatOptions,
+                selectedValue = uiState.selectedFormat,
+                onOptionSelected = { format ->
+                    if (uiState.selectedFormat != format) {
+                        haptic.tick()
+                    }
+                    viewModel.onFormatSelected(format)
                 }
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = uiState.selectedFormat.description,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            SettingsSectionHeader(
+                title = "Account",
+                subtitle = "Images link to your signed-in Gmail"
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+
+            val displayEmail = EmailUtils.formatDisplayGmail(uiState.email, fallback = "Authenticated Account")
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("upload_email_input"),
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = "Read-Only",
-                            modifier = Modifier.size(12.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.Email,
+                        contentDescription = "Authenticated Gmail",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Locked",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            text = "Authenticated Gmail",
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Text(
+                            text = displayEmail,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = "Read-Only",
+                                modifier = Modifier.size(12.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Locked",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
-        }
-        Text(
-            text = "Images are automatically linked to your authenticated Gmail account",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 4.dp, top = 4.dp)
-        )
 
-        Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-        // The queue action persists the selected bytes locally before scheduling network work.
-        Button(
-            onClick = {
-                haptic.click()
-                viewModel.queueSelectedImage(context)
-            },
-            enabled = uiState.selectedUri != null &&
-                !uiState.isUploading &&
-                !uiState.isQueueing &&
-                uiState.email.isNotBlank(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .testTag("upload_submit_button"),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
-            )
-        ) {
-            if (uiState.isQueueing) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    strokeWidth = 2.5.dp,
-                    color = MaterialTheme.colorScheme.onPrimary
+            Button(
+                onClick = {
+                    haptic.click()
+                    viewModel.queueSelectedImage(context)
+                },
+                enabled = uiState.selectedUri != null &&
+                    !uiState.isUploading &&
+                    !uiState.isQueueing &&
+                    uiState.email.isNotBlank(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(AppDimens.buttonHeight)
+                    .testTag("upload_submit_button"),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
                 )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text("Saving image on this device...", color = MaterialTheme.colorScheme.onPrimary)
-            } else {
-                Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onPrimary)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Add to Upload Queue", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onPrimary)
+            ) {
+                if (uiState.isQueueing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.5.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("Saving image on this device...", color = MaterialTheme.colorScheme.onPrimary)
+                } else {
+                    Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Add to Upload Queue", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onPrimary)
+                }
             }
         }
 

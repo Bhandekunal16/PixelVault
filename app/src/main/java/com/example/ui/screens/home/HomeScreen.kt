@@ -46,6 +46,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +61,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.data.model.ImageMetadata
+import com.example.ui.components.ConfirmationDialog
+import com.example.ui.components.AppToolbarIconButton
 import com.example.ui.components.EmptyStateCard
 import com.example.ui.components.StorageUsageCard
 import com.example.ui.components.StatusBanner
@@ -79,6 +84,21 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
     val haptic = rememberHapticHelper()
+    var showLogoutConfirm by remember { mutableStateOf(false) }
+
+    if (showLogoutConfirm) {
+        ConfirmationDialog(
+            title = "Log Out?",
+            message = "Are you sure you want to log out of your account?",
+            confirmLabel = "Log Out",
+            isDestructive = false,
+            onConfirm = {
+                showLogoutConfirm = false
+                viewModel.logout(onLogout)
+            },
+            onDismiss = { showLogoutConfirm = false }
+        )
+    }
 
     LaunchedEffect(uiState.userEmail) {
         viewModel.syncDashboardIfStale()
@@ -111,33 +131,27 @@ fun HomeScreen(
                     color = MaterialTheme.colorScheme.onBackground
                 )
             }
-            Row {
-                IconButton(
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                AppToolbarIconButton(
                     onClick = {
                         haptic.click()
                         viewModel.refreshDashboardData()
                     },
-                    modifier = Modifier.testTag("refresh_dashboard_button")
-                ) {
-                    Icon(
-                        Icons.Default.Refresh,
-                        contentDescription = "Refresh",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                IconButton(
+                    icon = Icons.Default.Refresh,
+                    contentDescription = "Refresh dashboard",
+                    testTag = "refresh_dashboard_button",
+                    showProgress = uiState.isLoading || uiState.isSyncing
+                )
+                AppToolbarIconButton(
                     onClick = {
                         haptic.click()
-                        viewModel.logout(onLogout)
+                        showLogoutConfirm = true
                     },
-                    modifier = Modifier.testTag("logout_dashboard_button")
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.Logout,
-                        contentDescription = "Logout",
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
+                    icon = Icons.AutoMirrored.Filled.Logout,
+                    contentDescription = "Log out",
+                    testTag = "logout_dashboard_button",
+                    tint = MaterialTheme.colorScheme.error
+                )
             }
         }
 
@@ -159,44 +173,9 @@ fun HomeScreen(
             onRefresh = viewModel::refreshStorageUsageIfStale
         )
 
-        if (pendingUploadCount > 0) {
-            Spacer(modifier = Modifier.height(12.dp))
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable(onClick = onNavigateToUpload)
-                    .testTag("dashboard_pending_uploads"),
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Default.CloudUpload,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "$pendingUploadCount image${if (pendingUploadCount == 1) "" else "s"} waiting to upload",
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.weight(1f)
-                    )
-                    TextButton(onClick = onNavigateToUpload) {
-                        Text("View")
-                    }
-                }
-            }
-        }
-
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Stats Overview Card with Solid Surface and Crisp Border
+        // Vault summary (quota details live in Cloud storage card above)
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -227,8 +206,8 @@ fun HomeScreen(
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Cloud Storage Vault",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                            text = "Vault Summary",
+                            style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -254,33 +233,20 @@ fun HomeScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Total Images",
+                            text = "Total images",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
-                    Column {
-                        Text(
-                            text = FileUtils.formatBytes(uiState.totalStoredBytes),
-                            style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Stored Size",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Column {
+                    Column(horizontalAlignment = Alignment.End) {
                         Text(
                             text = "${uiState.savingsPercentage}%",
                             style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "Optimized",
+                            text = "Storage saved",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

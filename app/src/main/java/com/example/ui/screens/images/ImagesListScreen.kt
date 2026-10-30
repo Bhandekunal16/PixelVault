@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -60,12 +61,14 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.data.model.ImageMetadata
+import com.example.ui.components.AppToolbarIconButton
+import com.example.ui.components.CompressionSavingsBadge
+import com.example.ui.components.PendingUploadBanner
 import com.example.ui.components.ConfirmationDialog
 import com.example.ui.components.EmptyStateCard
 import com.example.ui.components.FullScreenLoading
 import com.example.ui.components.StatusBanner
-import com.example.ui.theme.OnSuccessGreenLight
-import com.example.ui.theme.SuccessGreen
+import com.example.ui.theme.AppDimens
 import com.example.ui.viewmodel.ImagesViewModel
 import com.example.util.EmailUtils
 import com.example.util.FileUtils
@@ -175,39 +178,11 @@ fun ImagesListScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 if (pendingUploadCount > 0) {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable(onClick = onNavigateToUpload)
-                            .testTag("images_pending_uploads"),
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.secondaryContainer
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                Icons.Default.CloudUpload,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "$pendingUploadCount upload${if (pendingUploadCount == 1) "" else "s"} pending",
-                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(
-                                text = "Manage",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
-                    }
+                    PendingUploadBanner(
+                        pendingUploadCount = pendingUploadCount,
+                        onClick = onNavigateToUpload,
+                        testTag = "images_pending_uploads"
+                    )
                     Spacer(modifier = Modifier.height(12.dp))
                 }
 
@@ -351,21 +326,21 @@ private fun ImagesListHeader(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (isMultiSelectMode) {
-                ImagesToolbarIconButton(
+                AppToolbarIconButton(
                     onClick = onSelectAll,
                     enabled = canSelect,
                     icon = Icons.Default.SelectAll,
                     contentDescription = if (allSelected) "Clear selection" else "Select all",
                     testTag = "select_all_images_button"
                 )
-                ImagesToolbarIconButton(
+                AppToolbarIconButton(
                     onClick = onExitMultiSelect,
                     icon = Icons.Default.Close,
                     contentDescription = "Cancel selection",
                     testTag = "exit_multiselect_button"
                 )
             } else {
-                ImagesToolbarIconButton(
+                AppToolbarIconButton(
                     onClick = onEnterMultiSelect,
                     enabled = canSelect,
                     icon = Icons.Default.CheckBoxOutlineBlank,
@@ -373,7 +348,7 @@ private fun ImagesListHeader(
                     testTag = "enter_multiselect_button"
                 )
             }
-            ImagesToolbarIconButton(
+            AppToolbarIconButton(
                 onClick = onRefresh,
                 enabled = !isSyncing,
                 icon = Icons.Default.Refresh,
@@ -381,50 +356,6 @@ private fun ImagesListHeader(
                 testTag = "refresh_images_button",
                 showProgress = isSyncing
             )
-        }
-    }
-}
-
-@Composable
-private fun ImagesToolbarIconButton(
-    onClick: () -> Unit,
-    icon: ImageVector,
-    contentDescription: String,
-    testTag: String,
-    enabled: Boolean = true,
-    showProgress: Boolean = false
-) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp
-    ) {
-        IconButton(
-            onClick = onClick,
-            enabled = enabled && !showProgress,
-            modifier = Modifier
-                .size(40.dp)
-                .testTag(testTag)
-        ) {
-            if (showProgress) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            } else {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = contentDescription,
-                    tint = if (enabled) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                    },
-                    modifier = Modifier.size(22.dp)
-                )
-            }
         }
     }
 }
@@ -460,7 +391,9 @@ private fun ImagesSelectionBottomBar(
                     IconButton(
                         onClick = onDownload,
                         enabled = !isBusy,
-                        modifier = Modifier.testTag("download_selected_images_button")
+                        modifier = Modifier
+                            .size(AppDimens.minTouchTarget)
+                            .testTag("download_selected_images_button")
                     ) {
                         Icon(
                             Icons.Default.Download,
@@ -472,7 +405,9 @@ private fun ImagesSelectionBottomBar(
                 IconButton(
                     onClick = onDelete,
                     enabled = !isBusy,
-                    modifier = Modifier.testTag("delete_selected_images_button")
+                    modifier = Modifier
+                        .size(AppDimens.minTouchTarget)
+                        .testTag("delete_selected_images_button")
                 ) {
                     Icon(
                         Icons.Default.Delete,
@@ -525,6 +460,7 @@ private fun ImageListItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = AppDimens.listItemMinHeight)
             .background(rowBackground)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp)
@@ -549,8 +485,8 @@ private fun ImageListItem(
 
         Box(
             modifier = Modifier
-                .size(64.dp)
-                .clip(RoundedCornerShape(11.dp))
+                .size(AppDimens.thumbnailSize)
+                .clip(RoundedCornerShape(AppDimens.thumbnailRadius))
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
@@ -591,29 +527,6 @@ private fun ImageListItem(
             visible = image.effectiveOptimized && image.savingsPercentage > 0,
             percentage = image.savingsPercentage
         )
-    }
-}
-
-@Composable
-private fun CompressionSavingsBadge(visible: Boolean, percentage: Int) {
-    Box(
-        modifier = Modifier.widthIn(min = 52.dp),
-        contentAlignment = Alignment.CenterEnd
-    ) {
-        if (visible) {
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = SuccessGreen.copy(alpha = 0.14f)
-            ) {
-                Text(
-                    text = "-$percentage%",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = OnSuccessGreenLight,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            }
-        }
     }
 }
 

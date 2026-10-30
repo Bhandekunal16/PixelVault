@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Refresh
@@ -28,6 +30,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.local.StorageUsageEntity
+import com.example.ui.theme.AppDimens
 import com.example.util.FileUtils
 
 private const val USAGE_FRESHNESS_MILLIS = 2 * 60 * 1000L
@@ -42,11 +45,12 @@ fun StorageUsageCard(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(AppDimens.cardRadius),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(AppDimens.cardPadding),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(
@@ -61,18 +65,21 @@ fun StorageUsageCard(
                 )
                 Text(
                     text = "Cloud storage",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier
                         .weight(1f)
                         .padding(start = 8.dp)
                 )
                 if (isRefreshing) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(AppDimens.minTouchTarget),
                         strokeWidth = 2.dp
                     )
                 } else {
-                    IconButton(onClick = onRefresh, modifier = Modifier.size(36.dp)) {
+                    IconButton(
+                        onClick = onRefresh,
+                        modifier = Modifier.size(AppDimens.minTouchTarget)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Refresh cloud storage usage"
@@ -143,7 +150,6 @@ fun StorageUsageCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = warningColor
             )
-            Spacer(modifier = Modifier.height(0.dp))
             if (isStale || errorMessage != null || usage.lastSyncError != null) {
                 Text(
                     text = "Showing last confirmed usage; it may be outdated.",

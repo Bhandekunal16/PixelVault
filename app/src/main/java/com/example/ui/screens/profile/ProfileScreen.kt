@@ -57,9 +57,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.security.BiometricCapability
-import com.example.ui.components.AutoLockTimeoutSegmentedControl
 import com.example.ui.components.AccountDetailsCard
+import com.example.ui.components.AutoLockTimeoutSegmentedControl
 import com.example.ui.components.ConfirmationDialog
+import com.example.ui.components.SettingsSectionHeader
+import com.example.ui.theme.AppDimens
 import com.example.ui.theme.ThemeMode
 import com.example.ui.viewmodel.SettingsViewModel
 import com.example.util.rememberHapticHelper
@@ -109,12 +111,18 @@ fun ProfileScreen(
             color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-            text = "Manage your account, appearance theme, device security, and encryption",
+            text = "Manage appearance, device security, and encryption",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(AppDimens.sectionSpacing))
+
+        SettingsSectionHeader(
+            title = "Account",
+            subtitle = "Your signed-in identity"
+        )
+        Spacer(modifier = Modifier.height(10.dp))
 
         AccountDetailsCard(
             userEmail = uiState.userEmail,
@@ -122,7 +130,13 @@ fun ProfileScreen(
             userRole = uiState.userRole
         )
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(AppDimens.sectionSpacing))
+
+        SettingsSectionHeader(
+            title = "Appearance",
+            subtitle = "Theme and Material You colors"
+        )
+        Spacer(modifier = Modifier.height(10.dp))
 
         // Appearance & Display Mode Card
         Card(
@@ -300,7 +314,13 @@ fun ProfileScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(AppDimens.sectionSpacing))
+
+        SettingsSectionHeader(
+            title = "Security",
+            subtitle = "Biometrics, device lock, and auto-lock timeout"
+        )
+        Spacer(modifier = Modifier.height(10.dp))
 
         // Device Lock & Biometric Security Card
         Card(
@@ -443,7 +463,13 @@ fun ProfileScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(AppDimens.sectionSpacing))
+
+        SettingsSectionHeader(
+            title = "Advanced",
+            subtitle = "Optional encrypted JSON responses"
+        )
+        Spacer(modifier = Modifier.height(10.dp))
 
         // Response Encryption Card
         Card(

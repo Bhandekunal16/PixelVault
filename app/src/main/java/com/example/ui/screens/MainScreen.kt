@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -76,6 +77,9 @@ fun MainScreen(
     // If an image is selected, display detail screen
     if (selectedImageForDetail != null) {
         val selectedImage = selectedImageForDetail!!
+        BackHandler {
+            selectedImageForDetail = null
+        }
         ImageDetailScreen(
             metadata = selectedImage,
             viewModel = detailViewModel,

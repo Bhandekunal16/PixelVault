@@ -50,6 +50,7 @@ import androidx.fragment.app.FragmentActivity
 import com.example.security.BiometricAuthManager
 import com.example.security.BiometricCapability
 import com.example.ui.components.ConfirmationDialog
+import com.example.ui.components.StatusBanner
 
 @Composable
 fun AppLockScreen(
@@ -193,35 +194,15 @@ fun AppLockScreen(
                 }
             }
 
-            // Error banner if any
             if (errorMessage != null) {
                 Spacer(modifier = Modifier.height(16.dp))
-                Card(
+                StatusBanner(
+                    message = errorMessage!!,
+                    isError = true,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("lock_error_banner"),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = errorMessage ?: "",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    }
-                }
+                        .testTag("lock_error_banner")
+                )
             }
 
             Spacer(modifier = Modifier.height(32.dp))
