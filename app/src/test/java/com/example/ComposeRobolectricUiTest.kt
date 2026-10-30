@@ -88,7 +88,7 @@ class ComposeRobolectricUiTest {
         val formattedEmail = com.example.util.EmailUtils.formatDisplayGmail(rawEmail)
         composeTestRule.setContent {
             MyApplicationTheme {
-                com.example.ui.screens.home.AccountInfoRow(
+                com.example.ui.components.AccountInfoRow(
                     label = "Email",
                     value = formattedEmail
                 )
