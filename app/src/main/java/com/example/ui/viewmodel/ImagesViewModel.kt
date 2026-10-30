@@ -1,5 +1,6 @@
 package com.example.ui.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.ImageMetadata
@@ -27,6 +28,8 @@ data class ImagesUiState(
     val selectedIds: Set<String> = emptySet(),
     val isDeleting: Boolean = false,
     val deleteSuccessMessage: String? = null,
+    val actionInfoMessage: String? = null,
+    val isPerformingListAction: Boolean = false,
     val userEmail: String = ""
 )
 
@@ -217,6 +220,67 @@ class ImagesViewModel(
 
     fun clearDeleteMessage() {
         _uiState.update { it.copy(deleteSuccessMessage = null) }
+    }
+
+    fun clearActionMessage() {
+        _uiState.update { it.copy(actionInfoMessage = null) }
+    }
+
+    fun downloadSelectedImage(context: Context) {
+        val state = _uiState.value
+        if (state.isPerformingListAction || state.selectedIds.size != 1) return
+        val id = state.selectedIds.first()
+        val metadata = state.images.find { it.effectiveId == id } ?: return
+        val account = activeAccount
+        if (account.isBlank()) return
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(isPerformingListAction = true, errorMessage = null, actionInfoMessage = null)
+            }
+            var bytes: ByteArray? = null
+            var fetchError: String? = null
+            imageRepository.getImageBytes(id, account).collect { resource ->
+                if (activeAccount != account) return@collect
+                when (resource) {
+                    is Resource.Loading -> Unit
+                    is Resource.Success -> bytes = resource.data
+                    is Resource.Error -> fetchError = resource.message
+                }
+            }
+            if (activeAccount != account) return@launch
+
+            val imageBytes = bytes
+            if (imageBytes == null) {
+                _uiState.update {
+                    it.copy(
+                        isPerformingListAction = false,
+                        errorMessage = fetchError ?: "Could not download image bytes."
+                    )
+                }
+                return@launch
+            }
+
+            val filename = metadata.effectiveFilename
+                ?: "download_${metadata.effectiveId}.${metadata.format?.lowercase() ?: "jpg"}"
+            val mime = metadata.effectiveMimeType ?: "image/jpeg"
+            val result = imageRepository.saveToDownloads(context, imageBytes, filename, mime)
+            result.onSuccess {
+                _uiState.update {
+                    it.copy(
+                        isPerformingListAction = false,
+                        actionInfoMessage = "Saved to Downloads: $filename"
+                    )
+                }
+            }.onFailure { err ->
+                _uiState.update {
+                    it.copy(
+                        isPerformingListAction = false,
+                        errorMessage = "Failed to save image: ${err.message}"
+                    )
+                }
+            }
+        }
     }
 
     fun clearSyncError() {
