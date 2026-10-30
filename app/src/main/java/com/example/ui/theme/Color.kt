@@ -40,6 +40,8 @@ val LightOnBackground = Color(0xFF18181B)       // Primary text: dark charcoal
 val LightOnSurface = Color(0xFF18181B)          // Primary text on cards
 val LightOnSurfaceVariant = Color(0xFF71717A)    // Secondary text: muted gray
 val LightOutline = Color(0xFFE4E4E7)            // Borders and dividers
+val AutoLockSegmentUnselectedBackground = Color(0xFFF1F3F8)
+val AutoLockSegmentUnselectedLabel = Color(0xFF3F3F46)
 
 val PurpleAccentLightContainer = Color(0xFFEDE9FE)
 val PurpleAccentLightOnContainer = Color(0xFF4C1D95)

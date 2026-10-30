@@ -62,15 +62,10 @@ The authenticated `GET /storage/usage` endpoint provides server-calculated usage
    ```bash
    npm install
    ```
-3. Start the server on port 8000:
-   ```bash
-   npm start
-   # or
-   node index.js
-   ```
+3. Start the API and proxy using the backend project’s process script or separate `node index.js` / `node proxy.js` terminals. Use the proxy port from `json/app.json` (`proxyPort`; committed default `8001`), not the raw backend listener ports.
 4. Verify that the server is listening:
    ```bash
-   curl http://localhost:8000/
+   curl http://localhost:8001/
    ```
 
 ---
@@ -84,7 +79,7 @@ The application includes an in-app **Server Configuration** editor in the **Sett
 - **Warning:** This hosted endpoint currently supports HTTP only. Login passwords, image data, and bearer tokens are not encrypted in transit and may be intercepted. Use a trusted HTTPS endpoint for sensitive or production use.
 
 ### Standard Android Emulator
-- **URL:** `http://10.0.2.2:8000/`
+- **URL:** `http://10.0.2.2:8001/` (use your backend `proxyPort`; the committed default is `8001`)
 - **Explanation:** In the Android emulator, `localhost` points to the emulator itself. `10.0.2.2` is the special alias provided by the Android emulator routing table to access the host machine's `127.0.0.1`.
 
 ### Physical Android Device
@@ -149,3 +144,16 @@ The APK will be generated at:
 - Legacy image records without `ownerId` are served only when their stored email matches the authenticated account. Newly uploaded records use the stable user ID from the token.
 - Account-scoped Room metadata remains on device after logout; logout clears credentials, not cached image metadata. Shared-device threat models may require explicit cache deletion on logout.
 - Image update APIs, server-side logout/revocation, refresh tokens, and offline mutation queues are not implemented.
+
+---
+
+## 10. Settings tab (Profile)
+
+The **Settings** tab (profile screen) includes:
+
+- **Server Configuration** — base URL editor and `GET /` connectivity test.
+- **Appearance** — light / dark / system theme, optional Material You dynamic color (Android 12+).
+- **Response Decryption** — optional AES JSON payload decryption when the backend enables `encryption_Interceptor`.
+- **Biometric & Device Lock** — optional app lock using device biometrics or PIN/pattern; **Lock Vault Now**; **Auto-Lock Timeout (After Backgrounding)** with choices **Immediately**, **30 sec**, **1 min**, and **5 min** (persisted in DataStore). Timeout selection uses a compact segmented control in the Biometric & Device Lock card.
+
+App lock state is enforced locally on resume from background according to the selected timeout; it does not replace server bearer-token authentication for API calls.

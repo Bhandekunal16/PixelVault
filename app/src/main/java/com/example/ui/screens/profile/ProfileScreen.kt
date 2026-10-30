@@ -37,8 +37,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -62,6 +60,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.security.BiometricCapability
+import com.example.ui.components.AutoLockTimeoutSegmentedControl
 import com.example.ui.components.ConfirmationDialog
 import com.example.ui.theme.ThemeMode
 import com.example.ui.viewmodel.SettingsViewModel
@@ -498,42 +497,15 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    val timeouts = listOf(
-                        0L to "Immediately",
-                        30L to "30 sec",
-                        60L to "1 min",
-                        300L to "5 min"
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        timeouts.forEach { (seconds, label) ->
-                            val isSelected = uiState.lockTimeoutSeconds == seconds
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = {
-                                    if (uiState.lockTimeoutSeconds != seconds) {
-                                        haptic.tick()
-                                    }
-                                    viewModel.setLockTimeoutSeconds(seconds)
-                                },
-                                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                                shape = RoundedCornerShape(10.dp),
-                                border = BorderStroke(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("timeout_option_$seconds"),
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    selectedLabelColor = MaterialTheme.colorScheme.primary,
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            )
+                    AutoLockTimeoutSegmentedControl(
+                        selectedTimeoutSeconds = uiState.lockTimeoutSeconds,
+                        onTimeoutSelected = { seconds ->
+                            if (uiState.lockTimeoutSeconds != seconds) {
+                                haptic.tick()
+                            }
+                            viewModel.setLockTimeoutSeconds(seconds)
                         }
-                    }
+                    )
 
                     Spacer(modifier = Modifier.height(14.dp))
 
